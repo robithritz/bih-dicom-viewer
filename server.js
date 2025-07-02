@@ -221,6 +221,25 @@ app.get('/dicom-info/:filename', (req, res) => {
     }
 });
 
+// API endpoint to get list of DICOM files
+app.get('/api/files', (req, res) => {
+    try {
+        const dicomDir = path.join(__dirname, 'DICOM');
+        const files = fs.readdirSync(dicomDir)
+            .filter(file => file.toLowerCase().endsWith('.dcm'))
+            .map(file => ({
+                name: file,
+                path: path.join(dicomDir, file)
+            }));
+
+        console.log(`Found ${files.length} DICOM files`);
+        res.json(files);
+    } catch (error) {
+        console.error('Error reading DICOM directory:', error);
+        res.status(500).json({ error: 'Error reading DICOM directory' });
+    }
+});
+
 // Handle CORS preflight requests
 app.options('/dicom-file/:filename', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
