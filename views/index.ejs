@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DICOM Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .image-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            transition: transform 0.2s;
+        }
+
+        .image-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .image-info {
+            margin-bottom: 15px;
+        }
+
+        .image-info h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 1.2em;
+        }
+
+        .metadata {
+            font-size: 0.9em;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .metadata-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .metadata-label {
+            font-weight: bold;
+            color: #34495e;
+        }
+
+        .buttons {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        .no-images {
+            text-align: center;
+            color: #666;
+            font-size: 1.1em;
+            margin-top: 50px;
+        }
+
+        .stats {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .stats h2 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: black;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 DICOM Image Viewer</h1>
+            <p>Browse and analyze medical imaging files</p>
+        </div>
+
+        <% let totalImages=0; Object.values(studies).forEach(study=> {
+            Object.values(study.series).forEach(series => {
+            totalImages += series.instances.length;
+            });
+            });
+            %>
+
+            <% if (Object.keys(studies).length> 0) { %>
+                <div class="stats">
+                    <h2>📊 Collection Statistics</h2>
+                    <p><strong>
+                            <%= Object.keys(studies).length %>
+                        </strong> studies • <strong>
+                            <%= totalImages %>
+                        </strong> DICOM images</p>
+                </div>
+
+                <% Object.values(studies).forEach((study, studyIndex)=> { %>
+                    <div class="study-container"
+                        style="margin-bottom: 30px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden;">
+                        <div class="study-header"
+                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px;">
+                            <h2 style="margin: 0 0 10px 0; font-size: 1.4em;">🏥 <%= study.studyDescription %>
+                            </h2>
+                            <div
+                                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 0.9em;">
+                                <div><strong>Patient:</strong>
+                                    <%= study.patientName %>
+                                </div>
+                                <div><strong>Patient ID:</strong>
+                                    <%= study.patientID %>
+                                </div>
+                                <div><strong>Study Date:</strong>
+                                    <%= study.studyDate %>
+                                </div>
+                                <div><strong>Study Time:</strong>
+                                    <%= study.studyTime %>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="series-container" style="padding: 20px;">
+                            <% Object.values(study.series).forEach((series, seriesIndex)=> { %>
+                                <div class="series-section" style="margin-bottom: 25px;">
+                                    <div class="series-header"
+                                        style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #007acc;">
+                                        <h3 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1.1em;">
+                                            📊 Series <%= series.seriesNumber %>: <%= series.seriesDescription %>
+                                        </h3>
+                                        <div style="font-size: 0.9em; color: #666;">
+                                            <span><strong>Modality:</strong>
+                                                <%= series.modality %>
+                                            </span> •
+                                            <span><strong>Images:</strong>
+                                                <%= series.instances.length %>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="image-grid">
+                                        <% series.instances.forEach((instance, instanceIndex)=> { %>
+                                            <div class="image-card">
+                                                <div class="image-info">
+                                                    <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 1em;">
+                                                        📄 <%= instance.filename %>
+                                                    </h4>
+                                                    <div class="metadata">
+                                                        <div class="metadata-row">
+                                                            <span class="metadata-label">Instance:</span>
+                                                            <span>#<%= instance.instanceNumber %></span>
+                                                        </div>
+                                                        <div class="metadata-row">
+                                                            <span class="metadata-label">Dimensions:</span>
+                                                            <span>
+                                                                <%= instance.rows %> × <%= instance.columns %>
+                                                            </span>
+                                                        </div>
+                                                        <div class="metadata-row">
+                                                            <span class="metadata-label">Series:</span>
+                                                            <span>
+                                                                <%= series.seriesNumber %>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="buttons">
+                                                    <a href="/viewer/<%= instance.filename %>" class="btn btn-primary"
+                                                        style="text-decoration: none;">
+                                                        🔍 Open Viewer
+                                                    </a>
+                                                    <button class="btn btn-secondary"
+                                                        onclick="showMetadata('<%= instance.filename %>')">
+                                                        📋 Metadata
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <% }); %>
+                                    </div>
+                                </div>
+                                <% }); %>
+                        </div>
+                    </div>
+                    <% }); %>
+                        <% } else { %>
+                            <div class="no-images">
+                                <h2>No DICOM files found</h2>
+                                <p>Please ensure DICOM files (.dcm) are placed in the DICOM directory.</p>
+                            </div>
+                            <% } %>
+    </div>
+
+    <!-- Modal for displaying metadata -->
+    <div id="metadataModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>DICOM Metadata</h2>
+            <div id="metadataContent">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showMetadata(filename) {
+            const modal = document.getElementById('metadataModal');
+            const content = document.getElementById('metadataContent');
+
+            modal.style.display = 'block';
+            content.innerHTML = 'Loading metadata...';
+
+            fetch(`/dicom-info/${filename}`)
+                .then(response => response.json())
+                .then(data => {
+                    let html = '<table style="width: 100%; border-collapse: collapse;">';
+                    for (const [key, value] of Object.entries(data)) {
+                        html += `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 8px; font-weight: bold; text-transform: capitalize;">
+                                    ${key.replace(/([A-Z])/g, ' $1').trim()}:
+                                </td>
+                                <td style="padding: 8px;">${value}</td>
+                            </tr>
+                        `;
+                    }
+                    html += '</table>';
+                    content.innerHTML = html;
+                })
+                .catch(error => {
+                    content.innerHTML = `<p style="color: red;">Error loading metadata: ${error.message}</p>`;
+                });
+        }
+
+        function showImageInfo(filename) {
+            const modal = document.getElementById('metadataModal');
+            const content = document.getElementById('metadataContent');
+
+            modal.style.display = 'block';
+            content.innerHTML = 'Loading image information...';
+
+            fetch(`/dicom-image/${filename}`)
+                .then(response => response.json())
+                .then(data => {
+                    let html = '<h3>Image Data Information</h3>';
+                    html += '<table style="width: 100%; border-collapse: collapse;">';
+                    for (const [key, value] of Object.entries(data)) {
+                        html += `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 8px; font-weight: bold; text-transform: capitalize;">
+                                    ${key.replace(/([A-Z])/g, ' $1').trim()}:
+                                </td>
+                                <td style="padding: 8px;">${value}</td>
+                            </tr>
+                        `;
+                    }
+                    html += '</table>';
+                    html += '<p style="margin-top: 15px; padding: 10px; background-color: #e8f4fd; border-radius: 4px;"><strong>Note:</strong> For actual image rendering, consider integrating with libraries like Cornerstone.js or OHIF Viewer for proper DICOM image display.</p>';
+                    content.innerHTML = html;
+                })
+                .catch(error => {
+                    content.innerHTML = `<p style="color: red;">Error loading image info: ${error.message}</p>`;
+                });
+        }
+
+        function closeModal() {
+            document.getElementById('metadataModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function (event) {
+            const modal = document.getElementById('metadataModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+
+</html>

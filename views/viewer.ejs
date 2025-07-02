@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DICOM Viewer - <%= filename %>
+    </title>
+
+    <!-- Cornerstone.js and dependencies -->
+    <script src="https://unpkg.com/cornerstone-core@2.6.1/dist/cornerstone.min.js"></script>
+    <script src="https://unpkg.com/cornerstone-math@0.1.9/dist/cornerstoneMath.min.js"></script>
+    <script src="https://unpkg.com/cornerstone-tools@6.0.10/dist/cornerstoneTools.min.js"></script>
+    <script
+        src="https://unpkg.com/cornerstone-web-image-loader@2.1.1/dist/cornerstoneWebImageLoader.bundle.min.js"></script>
+    <script
+        src="https://unpkg.com/cornerstone-wado-image-loader@4.13.2/dist/cornerstoneWADOImageLoader.bundle.min.js"></script>
+    <script src="https://unpkg.com/dicom-parser@1.8.21/dist/dicomParser.min.js"></script>
+    <script src="https://unpkg.com/hammerjs@2.0.8/hammer.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .viewer-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 300px;
+            background-color: #2d2d2d;
+            border-right: 1px solid #444;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .main-viewer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            background-color: #333;
+            padding: 10px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            padding: 0 10px;
+            border-right: 1px solid #555;
+        }
+
+        .tool-group:last-child {
+            border-right: none;
+        }
+
+        .tool-btn {
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s;
+        }
+
+        .tool-btn:hover {
+            background-color: #666;
+        }
+
+        .tool-btn.active {
+            background-color: #007acc;
+        }
+
+        .viewport-container {
+            flex: 1;
+            position: relative;
+            background-color: #000;
+        }
+
+        .viewport {
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+        }
+
+        .info-panel {
+            padding: 15px;
+            border-bottom: 1px solid #444;
+        }
+
+        .info-panel h3 {
+            color: #007acc;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .info-label {
+            color: #ccc;
+            font-weight: bold;
+        }
+
+        .info-value {
+            color: #fff;
+        }
+
+        .controls-panel {
+            padding: 15px;
+            border-bottom: 1px solid #444;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            color: #ccc;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .control-input {
+            width: 100%;
+            background-color: #444;
+            border: 1px solid #555;
+            color: white;
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .range-input {
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .viewport-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #007acc;
+            font-size: 18px;
+        }
+
+        .error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b6b;
+            text-align: center;
+        }
+
+        .back-btn {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 12px;
+            display: inline-block;
+        }
+
+        .back-btn:hover {
+            background-color: #005a9e;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="viewer-container">
+        <div class="sidebar">
+            <div class="info-panel">
+                <h3>📄 File Information</h3>
+                <div class="info-row">
+                    <span class="info-label">Filename:</span>
+                    <span class="info-value">
+                        <%= filename %>
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Patient:</span>
+                    <span class="info-value" id="patientName">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Study Date:</span>
+                    <span class="info-value" id="studyDate">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Modality:</span>
+                    <span class="info-value" id="modality">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Dimensions:</span>
+                    <span class="info-value" id="dimensions">Loading...</span>
+                </div>
+            </div>
+
+            <div class="controls-panel">
+                <h3>🎛️ Window/Level</h3>
+                <div class="control-group">
+                    <label for="windowWidth">Window Width:</label>
+                    <input type="range" id="windowWidth" class="range-input" min="1" max="4000" value="400">
+                    <input type="number" id="windowWidthValue" class="control-input" value="400">
+                </div>
+                <div class="control-group">
+                    <label for="windowCenter">Window Center:</label>
+                    <input type="range" id="windowCenter" class="range-input" min="-1000" max="3000" value="40">
+                    <input type="number" id="windowCenterValue" class="control-input" value="40">
+                </div>
+            </div>
+
+            <div class="controls-panel">
+                <h3>🔍 Zoom & Pan</h3>
+                <div class="control-group">
+                    <label for="zoomLevel">Zoom Level:</label>
+                    <input type="range" id="zoomLevel" class="range-input" min="0.1" max="5" step="0.1" value="1">
+                    <input type="number" id="zoomLevelValue" class="control-input" step="0.1" value="1">
+                </div>
+                <button class="tool-btn" onclick="resetView()">Reset View</button>
+            </div>
+
+            <div class="controls-panel" id="seriesNavigation" style="display: none;">
+                <h3>📚 Series Navigation</h3>
+                <div class="control-group">
+                    <label>Current Series:</label>
+                    <select id="seriesSelector" class="control-input" onchange="switchSeries()">
+                        <!-- Options populated by JavaScript -->
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Instance: <span id="currentInstance">1</span> of <span id="totalInstances">1</span></label>
+                    <div style="display: flex; gap: 5px; margin-top: 5px;">
+                        <button class="tool-btn" onclick="previousInstance()" id="prevBtn">◀ Prev</button>
+                        <button class="tool-btn" onclick="nextInstance()" id="nextBtn">Next ▶</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <input type="range" id="instanceSlider" class="range-input" min="1" max="1" value="1"
+                        onchange="goToInstance(this.value)">
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <a href="/" class="back-btn">← Back to Gallery</a>
+            </div>
+        </div>
+
+        <div class="main-viewer">
+            <div class="toolbar">
+                <div class="tool-group">
+                    <button class="tool-btn active" id="wwwcTool" onclick="activateTool('wwwc')">🎛️ W/L</button>
+                    <button class="tool-btn" id="zoomTool" onclick="activateTool('zoom')">🔍 Zoom</button>
+                    <button class="tool-btn" id="panTool" onclick="activateTool('pan')">✋ Pan</button>
+                </div>
+                <div class="tool-group">
+                    <button class="tool-btn" id="lengthTool" onclick="activateTool('length')">📏 Length</button>
+                    <button class="tool-btn" id="angleTool" onclick="activateTool('angle')">📐 Angle</button>
+                    <button class="tool-btn" id="rectangleRoiTool" onclick="activateTool('rectangleRoi')">⬜ ROI</button>
+                </div>
+                <div class="tool-group">
+                    <button class="tool-btn" onclick="invertImage()">🔄 Invert</button>
+                    <button class="tool-btn" onclick="resetImage()">↺ Reset</button>
+                </div>
+            </div>
+
+            <div class="viewport-container">
+                <div class="viewport" id="dicomImage"></div>
+                <div class="viewport-info" id="viewportInfo">
+                    <div>Zoom: <span id="zoomInfo">1.0x</span></div>
+                    <div>W/L: <span id="wlInfo">400/40</span></div>
+                    <div>Position: <span id="positionInfo">0, 0</span></div>
+                </div>
+                <div class="loading" id="loadingIndicator">Loading DICOM image...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let element;
+        let currentTool = 'wwwc';
+        let imageId;
+        let seriesData = {};
+        let currentSeriesUID = '';
+        let currentInstanceIndex = 0;
+
+        // Initialize Cornerstone
+        function initializeCornerstone() {
+            try {
+                console.log('Initializing Cornerstone...');
+                element = document.getElementById('dicomImage');
+
+                // Enable the element for Cornerstone
+                cornerstone.enable(element);
+                console.log('Cornerstone element enabled');
+
+                // Configure WADO Image Loader with proper settings
+                cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+                cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+
+                // Configure WADO Image Loader settings
+                cornerstoneWADOImageLoader.configure({
+                    beforeSend: function (xhr) {
+                        console.log('WADO request being sent:', xhr);
+                    },
+                    errorInterceptor: function (error) {
+                        console.error('WADO Image Loader Error:', error);
+                        return error;
+                    }
+                });
+
+                // Register the WADO image loader
+                cornerstone.registerImageLoader('wadouri', cornerstoneWADOImageLoader.wadouri.loadImage);
+
+                // Configure Web Image Loader (if available)
+                if (typeof cornerstoneWebImageLoader !== 'undefined') {
+                    cornerstoneWebImageLoader.external.cornerstone = cornerstone;
+                }
+
+                // Initialize Cornerstone Tools (if available)
+                if (typeof cornerstoneTools !== 'undefined') {
+                    cornerstoneTools.external.cornerstone = cornerstone;
+                    if (typeof Hammer !== 'undefined') {
+                        cornerstoneTools.external.Hammer = Hammer;
+                    }
+                    if (typeof cornerstoneMath !== 'undefined') {
+                        cornerstoneTools.external.cornerstoneMath = cornerstoneMath;
+                    }
+                    cornerstoneTools.init();
+                    console.log('Cornerstone Tools initialized');
+
+                    // Add tools
+                    cornerstoneTools.addTool(cornerstoneTools.WwwcTool);
+                    cornerstoneTools.addTool(cornerstoneTools.ZoomTool);
+                    cornerstoneTools.addTool(cornerstoneTools.PanTool);
+                    cornerstoneTools.addTool(cornerstoneTools.LengthTool);
+                    cornerstoneTools.addTool(cornerstoneTools.AngleTool);
+                    cornerstoneTools.addTool(cornerstoneTools.RectangleRoiTool);
+
+                    // Set initial tool
+                    cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
+                    console.log('Tools configured');
+                } else {
+                    console.warn('Cornerstone Tools not available - tools will be disabled');
+                }
+
+                // Load the DICOM image
+                loadDicomImage();
+
+            } catch (error) {
+                console.error('Error initializing Cornerstone:', error);
+                document.getElementById('loadingIndicator').innerHTML =
+                    '<div class="error">Error initializing viewer<br>' + error.message + '</div>';
+            }
+        }
+
+        function loadDicomImage() {
+            const filename = '<%= filename %>';
+            console.log('Loading DICOM image:', filename);
+
+            // Try different image loading approaches
+            const imageIds = [
+                `wadouri:http://localhost:3000/dicom-file/${filename}`,
+                `wadouri:/dicom-file/${filename}`
+            ];
+
+            let currentImageIdIndex = 0;
+
+            function tryLoadImage() {
+                if (currentImageIdIndex >= imageIds.length) {
+                    console.error('All image loading methods failed');
+                    document.getElementById('loadingIndicator').innerHTML =
+                        '<div class="error">Failed to load DICOM image<br>Please check the console for details</div>';
+                    return;
+                }
+
+                imageId = imageIds[currentImageIdIndex];
+                console.log('Trying to load with imageId:', imageId);
+
+                cornerstone.loadImage(imageId).then(function (image) {
+                    console.log('Successfully loaded DICOM image:', image);
+                    cornerstone.displayImage(element, image);
+
+                    // Hide loading indicator
+                    document.getElementById('loadingIndicator').style.display = 'none';
+
+                    // Update image information
+                    updateImageInfo(image);
+
+                    // Set up event listeners
+                    setupEventListeners();
+
+                    // Load metadata
+                    loadMetadata(filename);
+
+                }).catch(function (err) {
+                    console.error(`Error loading DICOM image with ${imageId}:`, err);
+                    currentImageIdIndex++;
+
+                    if (currentImageIdIndex < imageIds.length) {
+                        console.log('Trying next image loading method...');
+                        setTimeout(tryLoadImage, 100);
+                    } else {
+                        document.getElementById('loadingIndicator').innerHTML =
+                            '<div class="error">Error loading DICOM image<br>' + err.message + '</div>';
+                    }
+                });
+            }
+
+            tryLoadImage();
+        }
+
+        function updateImageInfo(image) {
+            document.getElementById('dimensions').textContent =
+                `${image.width} × ${image.height}`;
+
+            // Update window/level controls with image defaults
+            const viewport = cornerstone.getViewport(element);
+            updateWindowLevelControls(viewport.voi.windowWidth, viewport.voi.windowCenter);
+        }
+
+        function loadMetadata(filename) {
+            fetch(`/dicom-info/${filename}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('patientName').textContent = data.patientName || 'Unknown';
+                    document.getElementById('studyDate').textContent = data.studyDate || 'Unknown';
+                    document.getElementById('modality').textContent = data.modality || 'Unknown';
+                })
+                .catch(error => {
+                    console.error('Error loading metadata:', error);
+                });
+        }
+
+        function setupEventListeners() {
+            // Viewport change events
+            element.addEventListener('cornerstoneimagerendered', function (e) {
+                const viewport = e.detail.viewport;
+                document.getElementById('zoomInfo').textContent = viewport.scale.toFixed(2) + 'x';
+                document.getElementById('wlInfo').textContent =
+                    `${Math.round(viewport.voi.windowWidth)}/${Math.round(viewport.voi.windowCenter)}`;
+
+                // Update zoom control
+                document.getElementById('zoomLevel').value = viewport.scale;
+                document.getElementById('zoomLevelValue').value = viewport.scale.toFixed(2);
+            });
+
+            // Mouse move for position tracking
+            element.addEventListener('mousemove', function (e) {
+                const rect = element.getBoundingClientRect();
+                const x = Math.round(e.clientX - rect.left);
+                const y = Math.round(e.clientY - rect.top);
+                document.getElementById('positionInfo').textContent = `${x}, ${y}`;
+            });
+
+            // Window/Level control synchronization
+            const windowWidthSlider = document.getElementById('windowWidth');
+            const windowWidthValue = document.getElementById('windowWidthValue');
+            const windowCenterSlider = document.getElementById('windowCenter');
+            const windowCenterValue = document.getElementById('windowCenterValue');
+
+            [windowWidthSlider, windowWidthValue].forEach(control => {
+                control.addEventListener('input', function () {
+                    const value = parseFloat(this.value);
+                    windowWidthSlider.value = value;
+                    windowWidthValue.value = value;
+                    updateWindowLevel();
+                });
+            });
+
+            [windowCenterSlider, windowCenterValue].forEach(control => {
+                control.addEventListener('input', function () {
+                    const value = parseFloat(this.value);
+                    windowCenterSlider.value = value;
+                    windowCenterValue.value = value;
+                    updateWindowLevel();
+                });
+            });
+
+            // Zoom control
+            const zoomSlider = document.getElementById('zoomLevel');
+            const zoomValue = document.getElementById('zoomLevelValue');
+
+            [zoomSlider, zoomValue].forEach(control => {
+                control.addEventListener('input', function () {
+                    const value = parseFloat(this.value);
+                    zoomSlider.value = value;
+                    zoomValue.value = value.toFixed(2);
+
+                    const viewport = cornerstone.getViewport(element);
+                    viewport.scale = value;
+                    cornerstone.setViewport(element, viewport);
+                });
+            });
+        }
+
+        function updateWindowLevel() {
+            const windowWidth = parseFloat(document.getElementById('windowWidth').value);
+            const windowCenter = parseFloat(document.getElementById('windowCenter').value);
+
+            const viewport = cornerstone.getViewport(element);
+            viewport.voi.windowWidth = windowWidth;
+            viewport.voi.windowCenter = windowCenter;
+            cornerstone.setViewport(element, viewport);
+        }
+
+        function updateWindowLevelControls(windowWidth, windowCenter) {
+            document.getElementById('windowWidth').value = windowWidth;
+            document.getElementById('windowWidthValue').value = Math.round(windowWidth);
+            document.getElementById('windowCenter').value = windowCenter;
+            document.getElementById('windowCenterValue').value = Math.round(windowCenter);
+        }
+
+        function activateTool(toolName) {
+            // Deactivate all tools
+            cornerstoneTools.setToolPassive('Wwwc');
+            cornerstoneTools.setToolPassive('Zoom');
+            cornerstoneTools.setToolPassive('Pan');
+            cornerstoneTools.setToolPassive('Length');
+            cornerstoneTools.setToolPassive('Angle');
+            cornerstoneTools.setToolPassive('RectangleRoi');
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+
+            // Activate selected tool
+            switch (toolName) {
+                case 'wwwc':
+                    cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
+                    break;
+                case 'zoom':
+                    cornerstoneTools.setToolActive('Zoom', { mouseButtonMask: 1 });
+                    break;
+                case 'pan':
+                    cornerstoneTools.setToolActive('Pan', { mouseButtonMask: 1 });
+                    break;
+                case 'length':
+                    cornerstoneTools.setToolActive('Length', { mouseButtonMask: 1 });
+                    break;
+                case 'angle':
+                    cornerstoneTools.setToolActive('Angle', { mouseButtonMask: 1 });
+                    break;
+                case 'rectangleRoi':
+                    cornerstoneTools.setToolActive('RectangleRoi', { mouseButtonMask: 1 });
+                    break;
+            }
+
+            // Add active class to selected button
+            document.getElementById(toolName + 'Tool').classList.add('active');
+            currentTool = toolName;
+        }
+
+        function resetView() {
+            cornerstone.reset(element);
+            const viewport = cornerstone.getViewport(element);
+            updateWindowLevelControls(viewport.voi.windowWidth, viewport.voi.windowCenter);
+        }
+
+        function invertImage() {
+            const viewport = cornerstone.getViewport(element);
+            viewport.invert = !viewport.invert;
+            cornerstone.setViewport(element, viewport);
+        }
+
+        function resetImage() {
+            cornerstone.reset(element);
+            const viewport = cornerstone.getViewport(element);
+            updateWindowLevelControls(viewport.voi.windowWidth, viewport.voi.windowCenter);
+        }
+
+        // Series navigation functions
+        function loadSeriesData() {
+            // Load series files for the current DICOM file
+            fetch('/series-files/<%= filename %>')
+                .then(response => response.json())
+                .then(data => {
+                    const studyUID = data.studyUID || 'unknown';
+                    const seriesUID = data.seriesUID || 'unknown';
+
+                    if (!seriesData[studyUID]) {
+                        seriesData[studyUID] = {};
+                    }
+
+                    // Load metadata for series description
+                    fetch('/dicom-info/<%= filename %>')
+                        .then(response => response.json())
+                        .then(metaData => {
+                            seriesData[studyUID][seriesUID] = {
+                                description: metaData.seriesDescription || 'Unknown Series',
+                                instances: data.files || ['<%= filename %>']
+                            };
+
+                            currentSeriesUID = seriesUID;
+                            // Find current instance index
+                            currentInstanceIndex = data.files.indexOf('<%= filename %>');
+                            if (currentInstanceIndex === -1) currentInstanceIndex = 0;
+
+                            updateSeriesNavigation();
+                        });
+                })
+                .catch(error => {
+                    console.error('Error loading series data:', error);
+                    // Fallback to single file
+                    seriesData['unknown'] = {
+                        'unknown': {
+                            description: 'Single Image',
+                            instances: ['<%= filename %>']
+                        }
+                    };
+                    currentSeriesUID = 'unknown';
+                    currentInstanceIndex = 0;
+                    updateSeriesNavigation();
+                });
+        }
+
+        function updateSeriesNavigation() {
+            const seriesNav = document.getElementById('seriesNavigation');
+            const selector = document.getElementById('seriesSelector');
+            const currentInstance = document.getElementById('currentInstance');
+            const totalInstances = document.getElementById('totalInstances');
+            const instanceSlider = document.getElementById('instanceSlider');
+
+            // Show navigation if we have series data
+            if (Object.keys(seriesData).length > 0) {
+                seriesNav.style.display = 'block';
+
+                // Populate series selector
+                selector.innerHTML = '';
+                Object.keys(seriesData).forEach(studyUID => {
+                    Object.keys(seriesData[studyUID]).forEach(seriesUID => {
+                        const series = seriesData[studyUID][seriesUID];
+                        const option = document.createElement('option');
+                        option.value = seriesUID;
+                        option.textContent = series.description;
+                        option.selected = seriesUID === currentSeriesUID;
+                        selector.appendChild(option);
+                    });
+                });
+
+                // Update instance navigation
+                const currentSeries = getCurrentSeries();
+                if (currentSeries) {
+                    const totalCount = currentSeries.instances.length;
+                    currentInstance.textContent = currentInstanceIndex + 1;
+                    totalInstances.textContent = totalCount;
+
+                    instanceSlider.min = 1;
+                    instanceSlider.max = totalCount;
+                    instanceSlider.value = currentInstanceIndex + 1;
+
+                    // Update button states
+                    document.getElementById('prevBtn').disabled = currentInstanceIndex === 0;
+                    document.getElementById('nextBtn').disabled = currentInstanceIndex === totalCount - 1;
+                }
+            }
+        }
+
+        function getCurrentSeries() {
+            for (const studyUID in seriesData) {
+                if (seriesData[studyUID][currentSeriesUID]) {
+                    return seriesData[studyUID][currentSeriesUID];
+                }
+            }
+            return null;
+        }
+
+        function switchSeries() {
+            const selector = document.getElementById('seriesSelector');
+            currentSeriesUID = selector.value;
+            currentInstanceIndex = 0;
+
+            const series = getCurrentSeries();
+            if (series && series.instances.length > 0) {
+                loadDicomImageByFilename(series.instances[0]);
+            }
+
+            updateSeriesNavigation();
+        }
+
+        function previousInstance() {
+            const series = getCurrentSeries();
+            if (series && currentInstanceIndex > 0) {
+                currentInstanceIndex--;
+                loadDicomImageByFilename(series.instances[currentInstanceIndex]);
+                updateSeriesNavigation();
+            }
+        }
+
+        function nextInstance() {
+            const series = getCurrentSeries();
+            if (series && currentInstanceIndex < series.instances.length - 1) {
+                currentInstanceIndex++;
+                loadDicomImageByFilename(series.instances[currentInstanceIndex]);
+                updateSeriesNavigation();
+            }
+        }
+
+        function goToInstance(instanceNumber) {
+            const series = getCurrentSeries();
+            if (series) {
+                currentInstanceIndex = parseInt(instanceNumber) - 1;
+                loadDicomImageByFilename(series.instances[currentInstanceIndex]);
+                updateSeriesNavigation();
+            }
+        }
+
+        function loadDicomImageByFilename(filename) {
+            const newImageId = `wadouri:/dicom-file/${filename}`;
+
+            cornerstone.loadImage(newImageId).then(function (image) {
+                cornerstone.displayImage(element, image);
+                updateImageInfo(image);
+                loadMetadata(filename);
+            }).catch(function (err) {
+                console.error('Error loading image:', err);
+            });
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function () {
+            initializeCornerstone();
+            loadSeriesData();
+        });
+    </script>
+</body>
+
+</html>
