@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Toolbar from './Toolbar';
 import FileBrowser from './FileBrowser';
 
-export default function CornerstoneViewer({ filename, metadata }) {
+export default function CornerstoneViewer({ filename, metadata, isAdmin = false }) {
   const elementRef = useRef(null);
   const router = useRouter();
   const [cornerstone, setCornerstone] = useState(null);
@@ -140,7 +140,10 @@ export default function CornerstoneViewer({ filename, metadata }) {
     if (!cornerstone || !elementRef.current) return;
 
     try {
-      const imageId = `wadouri:/api/dicom-file/${encodeURIComponent(filename)}`;
+      const apiPath = isAdmin
+        ? `/api/admin/dicom-file/${encodeURIComponent(filename)}`
+        : `/api/dicom-file/${encodeURIComponent(filename)}`;
+      const imageId = `wadouri:${apiPath}`;
 
       // Check for multi-frame
       const frames = parseInt(metadata?.numberOfFrames || '1');
@@ -184,7 +187,10 @@ export default function CornerstoneViewer({ filename, metadata }) {
     if (!cornerstoneRef.current || !elementRef.current) return;
 
     try {
-      const imageId = `wadouri:/api/dicom-file/${encodeURIComponent(filename)}#frame=${frameIndex}`;
+      const apiPath = isAdmin
+        ? `/api/admin/dicom-file/${encodeURIComponent(filename)}`
+        : `/api/dicom-file/${encodeURIComponent(filename)}`;
+      const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
       const image = await cornerstoneRef.current.loadImage(imageId);
 
       // Preserve viewport settings
@@ -302,7 +308,10 @@ export default function CornerstoneViewer({ filename, metadata }) {
           <FileBrowser
             currentFile={filename}
             onFileSelect={(newFilename) => {
-              window.location.href = `/viewer/${encodeURIComponent(newFilename)}`;
+              const viewerPath = isAdmin
+                ? `/admin/viewer/${encodeURIComponent(newFilename)}`
+                : `/viewer/${encodeURIComponent(newFilename)}`;
+              window.location.href = viewerPath;
             }}
             onClose={() => setShowFileBrowser(false)}
           />

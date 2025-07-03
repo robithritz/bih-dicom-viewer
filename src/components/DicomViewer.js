@@ -8,7 +8,7 @@ const CornerstoneViewer = dynamic(() => import('./CornerstoneViewer'), {
   loading: () => <div>Loading DICOM viewer...</div>
 });
 
-export default function DicomViewer({ filename }) {
+export default function DicomViewer({ filename, isAdmin = false }) {
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -23,10 +23,14 @@ export default function DicomViewer({ filename }) {
   const fetchMetadata = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/dicom-info/${encodeURIComponent(filename)}`);
+      const apiPath = isAdmin
+        ? `/api/admin/dicom-info/${encodeURIComponent(filename)}`
+        : `/api/dicom-info/${encodeURIComponent(filename)}`;
+
+      const response = await fetch(apiPath);
       if (!response.ok) {
         if (response.status == 401) {
-          router.replace('/login');
+          router.replace(isAdmin ? '/portal' : '/login');
         }
         throw new Error('Failed to fetch DICOM metadata', response);
       }
@@ -68,7 +72,7 @@ export default function DicomViewer({ filename }) {
         </div>
       </div>
 
-      <CornerstoneViewer filename={filename} metadata={metadata} />
+      <CornerstoneViewer filename={filename} metadata={metadata} isAdmin={isAdmin} />
 
 
     </div>

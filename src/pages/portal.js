@@ -303,7 +303,7 @@ export default function AdminPortal() {
                     <p><strong>Series:</strong> {Object.keys(study.series || {}).length}</p>
                   </div>
                   <Link
-                    href={`/viewer/${encodeURIComponent(study.firstFile)}`}
+                    href={`/admin/viewer/${encodeURIComponent(study.firstFile)}`}
                     className="view-button"
                   >
                     View Study

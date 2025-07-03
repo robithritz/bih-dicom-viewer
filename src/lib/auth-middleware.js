@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { getPatientByEmail } from './patient-service.js';
+import { getUserById } from './user-service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -151,5 +152,50 @@ export const validatePatientFileAccess = (req, filename) => {
     patientFilePath,
     actualFilename,
     patientId: patientIdFromPath
+  };
+};
+
+/**
+ * Admin authentication middleware
+ * Validates admin JWT token and ensures user has admin privileges
+ */
+export const requireAdminAuth = (handler) => {
+  return async (req, res) => {
+    try {
+      // Get admin token from cookie
+      const token = req.cookies['admin-auth-token'];
+
+      if (!token) {
+        return res.status(401).json({ error: 'Admin authentication required' });
+      }
+
+      // Verify admin token
+      const decoded = jwt.verify(token, JWT_SECRET);
+      console.log("dECODE", decoded);
+
+      // Get admin user data
+      const user = await getUserById(decoded.id);
+
+      console.log(user);
+
+      if (!user || user.role !== 'superadmin') {
+        return res.status(403).json({ error: 'Admin privileges required' });
+      }
+
+      // Add admin user to request
+      req.admin = user;
+
+      // Call the original handler
+      return handler(req, res);
+
+    } catch (error) {
+      console.error('Admin auth error:', error);
+
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Invalid or expired admin token' });
+      }
+
+      return res.status(500).json({ error: 'Admin authentication failed' });
+    }
   };
 };
