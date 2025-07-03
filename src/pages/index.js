@@ -111,8 +111,8 @@ export default function PatientPortal() {
           </div>
         ) : (
           <div className="studies-grid">
-            {Object.entries(studies).map(([filename, study]) => (
-              <div key={filename} className="study-card">
+            {Object.entries(studies).map(([studyId, study]) => (
+              <div key={studyId} className="study-card">
                 <div className="study-thumbnail">
                   {study.thumbnail ? (
                     <img
@@ -132,12 +132,11 @@ export default function PatientPortal() {
                     <p><strong>Study Date:</strong> {study.studyDate || 'N/A'}</p>
                     <p><strong>Modality:</strong> {study.modality || 'N/A'}</p>
                     <p><strong>Description:</strong> {study.studyDescription || 'N/A'}</p>
-                    {study.numberOfFrames && (
-                      <p><strong>Frames:</strong> {study.numberOfFrames}</p>
-                    )}
+                    <p><strong>Files:</strong> {study.files?.length || 0}</p>
+                    <p><strong>Series:</strong> {Object.keys(study.series || {}).length}</p>
                   </div>
                   <Link
-                    href={`/viewer/${encodeURIComponent(filename)}`}
+                    href={`/viewer/${encodeURIComponent(study.firstFile)}`}
                     className="view-button"
                   >
                     View Study

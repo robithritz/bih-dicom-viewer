@@ -140,7 +140,7 @@ export default function CornerstoneViewer({ filename, metadata }) {
     if (!cornerstone || !elementRef.current) return;
 
     try {
-      const imageId = `wadouri:/api/dicom-file/${filename}`;
+      const imageId = `wadouri:/api/dicom-file/${encodeURIComponent(filename)}`;
 
       // Check for multi-frame
       const frames = parseInt(metadata?.numberOfFrames || '1');
@@ -184,7 +184,7 @@ export default function CornerstoneViewer({ filename, metadata }) {
     if (!cornerstoneRef.current || !elementRef.current) return;
 
     try {
-      const imageId = `wadouri:/api/dicom-file/${filename}#frame=${frameIndex}`;
+      const imageId = `wadouri:/api/dicom-file/${encodeURIComponent(filename)}#frame=${frameIndex}`;
       const image = await cornerstoneRef.current.loadImage(imageId);
 
       // Preserve viewport settings
@@ -302,7 +302,7 @@ export default function CornerstoneViewer({ filename, metadata }) {
           <FileBrowser
             currentFile={filename}
             onFileSelect={(newFilename) => {
-              window.location.href = `/viewer/${newFilename}`;
+              window.location.href = `/viewer/${encodeURIComponent(newFilename)}`;
             }}
             onClose={() => setShowFileBrowser(false)}
           />

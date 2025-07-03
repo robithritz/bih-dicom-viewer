@@ -3,15 +3,35 @@ import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import DicomViewer from '../../components/DicomViewer';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ViewerPage() {
   const router = useRouter();
   const { filename } = router.query;
   const [isClient, setIsClient] = useState(false);
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
 
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Validate patient access when filename and user are available
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && user && filename) {
+      console.log("masuk");
+      // Check if filename contains patient ID (format: patientId/filename)
+      if (filename.includes('/')) {
+        const [patientIdFromPath] = filename.split('/');
+
+        // Redirect to home if patient ID doesn't match logged-in user
+        if (patientIdFromPath !== user.patientId || !user.role != "superadmin") {
+          console.warn('Patient ID mismatch:', patientIdFromPath, 'vs', user.patientId);
+          router.replace('/');
+          return;
+        }
+      }
+    }
+  }, [filename, user, isAuthenticated, authLoading, router]);
 
   if (!isClient) {
     return (

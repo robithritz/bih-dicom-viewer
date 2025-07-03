@@ -171,38 +171,86 @@ export function organizeDicomStudies(files) {
       const dataSet = parseDicomFile(file);
       const metadata = extractDicomMetadata(dataSet);
 
-      // Generate thumbnail for the file
-      let thumbnail = null;
-      try {
-        thumbnail = generateThumbnail(dataSet);
-      } catch (thumbnailError) {
-        console.warn(`Failed to generate thumbnail for ${file}:`, thumbnailError);
+      const studyId = metadata.studyInstanceUID;
+
+      // Initialize study if it doesn't exist
+      if (!studies[studyId]) {
+        // Generate thumbnail for the first file of the study
+        let thumbnail = null;
+        try {
+          thumbnail = generateThumbnail(dataSet);
+        } catch (thumbnailError) {
+          console.warn(`Failed to generate thumbnail for ${file}:`, thumbnailError);
+        }
+
+        studies[studyId] = {
+          studyInstanceUID: studyId,
+          patientName: metadata.patientName,
+          patientID: metadata.patientID,
+          studyDate: metadata.studyDate,
+          studyTime: metadata.studyTime,
+          studyDescription: metadata.studyDescription,
+          modality: metadata.modality,
+          thumbnail: thumbnail,
+          firstFile: file, // Include patient ID in path for viewer redirect
+          files: [],
+          series: {}
+        };
       }
 
-      // Use filename as key for direct viewer access
-      studies[file] = {
+      // Add file to the study
+      studies[studyId].files.push({
         filename: file,
-        studyInstanceUID: metadata.studyInstanceUID,
         seriesInstanceUID: metadata.seriesInstanceUID,
-        patientName: metadata.patientName,
-        patientID: metadata.patientID,
-        studyDate: metadata.studyDate,
-        studyTime: metadata.studyTime,
-        studyDescription: metadata.studyDescription,
         seriesDescription: metadata.seriesDescription,
-        modality: metadata.modality,
         instanceNumber: parseInt(metadata.instanceNumber),
         seriesNumber: parseInt(metadata.seriesNumber),
         rows: metadata.rows,
         columns: metadata.columns,
-        numberOfFrames: metadata.numberOfFrames,
-        thumbnail: thumbnail
-      };
+        numberOfFrames: metadata.numberOfFrames
+      });
+
+      // Organize by series within study
+      const seriesId = metadata.seriesInstanceUID;
+      if (!studies[studyId].series[seriesId]) {
+        studies[studyId].series[seriesId] = {
+          seriesInstanceUID: seriesId,
+          seriesNumber: parseInt(metadata.seriesNumber),
+          seriesDescription: metadata.seriesDescription,
+          modality: metadata.modality,
+          instances: []
+        };
+      }
+
+      // Add instance to series
+      studies[studyId].series[seriesId].instances.push({
+        filename: file,
+        instanceNumber: parseInt(metadata.instanceNumber),
+        rows: metadata.rows,
+        columns: metadata.columns,
+        numberOfFrames: metadata.numberOfFrames
+      });
 
     } catch (error) {
       console.error(`Error processing ${file}:`, error.message);
     }
   }
+
+  // Sort files and instances within each study
+  Object.values(studies).forEach(study => {
+    // Sort files by series number and instance number
+    study.files.sort((a, b) => {
+      if (a.seriesNumber !== b.seriesNumber) {
+        return a.seriesNumber - b.seriesNumber;
+      }
+      return a.instanceNumber - b.instanceNumber;
+    });
+
+    // Sort instances within each series
+    Object.values(study.series).forEach(series => {
+      series.instances.sort((a, b) => a.instanceNumber - b.instanceNumber);
+    });
+  });
 
   return studies;
 }

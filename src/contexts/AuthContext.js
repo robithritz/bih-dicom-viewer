@@ -28,7 +28,14 @@ export const AuthProvider = ({ children }) => {
         const data = await response.json();
         setUser(data.patient);
       } else {
-        setUser(null);
+        // try for admin auth me
+        const response = await fetch('/api/admin/auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);

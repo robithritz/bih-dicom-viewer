@@ -23,7 +23,7 @@ export default function DicomViewer({ filename }) {
   const fetchMetadata = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/dicom-info/${filename}`);
+      const response = await fetch(`/api/dicom-info/${encodeURIComponent(filename)}`);
       if (!response.ok) {
         if (response.status == 401) {
           router.replace('/login');

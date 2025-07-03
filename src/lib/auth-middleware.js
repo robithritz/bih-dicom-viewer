@@ -115,11 +115,31 @@ export const validatePatientFileAccess = (req, filename) => {
     };
   }
 
+  // Parse the filename parameter which might be in format "patientId/filename" or just "filename"
+  let patientIdFromPath, actualFilename;
+
+  if (filename.includes('/')) {
+    // Format: "patientId/filename"
+    [patientIdFromPath, actualFilename] = filename.split('/');
+
+    // Validate that the patient ID in path matches authenticated patient
+    if (patientIdFromPath !== patient.patientId) {
+      return {
+        isValid: false,
+        error: 'Access denied: Patient ID mismatch'
+      };
+    }
+  } else {
+    // Format: just "filename" - use authenticated patient ID
+    actualFilename = filename;
+    patientIdFromPath = patient.patientId;
+  }
+
   // Get the correct file path for this patient
-  const patientFilePath = getPatientFilePath(patient.patientId, filename);
+  const patientFilePath = getPatientFilePath(patientIdFromPath, actualFilename);
 
   // Check if patient has access to this file
-  if (!hasFileAccess(patient.patientId, patientFilePath)) {
+  if (!hasFileAccess(patientIdFromPath, patientFilePath)) {
     return {
       isValid: false,
       error: 'Access denied. You can only access your own medical files.'
@@ -128,6 +148,8 @@ export const validatePatientFileAccess = (req, filename) => {
 
   return {
     isValid: true,
-    patientFilePath
+    patientFilePath,
+    actualFilename,
+    patientId: patientIdFromPath
   };
 };

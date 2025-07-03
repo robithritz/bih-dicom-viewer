@@ -11,6 +11,7 @@ async function handler(req, res) {
   try {
     // Validate patient access to the requested file
     const validation = validatePatientFileAccess(req, filename);
+    console.log('Validating patient file access:', validation);
 
     if (!validation.isValid) {
       return res.status(403).json({ error: validation.error });
