@@ -1,0 +1,73 @@
+import { useState, useEffect } from 'react';
+
+export default function FileBrowser({ currentFile, onFileSelect, onClose }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+
+  const fetchFiles = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/files');
+      if (!response.ok) {
+        throw new Error('Failed to fetch files');
+      }
+      const data = await response.json();
+      setFiles(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="file-browser">
+      <div className="file-browser-header">
+        <h3>📁 DICOM Files</h3>
+        <button className="close-btn" onClick={onClose} title="Close file browser">
+          ✕
+        </button>
+      </div>
+
+      <div className="file-list">
+        {loading && <div className="loading">Loading files...</div>}
+
+        {error && (
+          <div className="error">
+            <p>Error: {error}</p>
+            <button onClick={fetchFiles}>Retry</button>
+          </div>
+        )}
+
+        {!loading && !error && files.length === 0 && (
+          <div className="empty">No DICOM files found</div>
+        )}
+
+        {!loading && !error && files.map((file, index) => (
+          <div
+            key={index}
+            className={`file-item ${file.name === currentFile ? 'active' : ''}`}
+            onClick={() => onFileSelect(file.name)}
+            title={`Click to view ${file.name}`}
+          >
+            <div className="file-icon">📄</div>
+            <div className="file-info">
+              <div className="file-name">{file.name}</div>
+              <div className="file-path">{file.path}</div>
+            </div>
+            {file.name === currentFile && (
+              <div className="current-indicator">👁️</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+
+    </div>
+  );
+}

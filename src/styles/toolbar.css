@@ -1,0 +1,80 @@
+/* Toolbar styles for DICOM Viewer */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #444;
+  overflow-x: auto;
+  min-height: 60px;
+}
+
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: fit-content;
+}
+
+.tool-group h3 {
+  margin: 0;
+  font-size: 12px;
+  color: #ccc;
+  text-align: center;
+}
+
+.tool-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.tool-btn {
+  background: #444;
+  color: white;
+  border: 1px solid #666;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tool-btn:hover {
+  background: #555;
+  border-color: #777;
+}
+
+.tool-btn.active {
+  background: #007bff;
+  border-color: #0056b3;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+.frame-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #ccc;
+  font-size: 12px;
+  text-align: center;
+}
+
+.frame-info small {
+  font-size: 10px;
+  color: #999;
+  margin-top: 2px;
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .tool-group {
+    min-width: auto;
+  }
+}
