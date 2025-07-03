@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Toolbar from './Toolbar';
 import FileBrowser from './FileBrowser';
 
@@ -12,6 +12,10 @@ export default function CornerstoneViewer({ filename, metadata }) {
   const [rotation, setRotation] = useState(0);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [viewport, setViewport] = useState(null);
+
+  const totalFramesRef = useRef(totalFrames);
+  const currentFramesRef = useRef(currentFrame);
+  const cornerstoneRef = useRef(null);
 
   useEffect(() => {
     initializeCornerstone();
@@ -28,6 +32,16 @@ export default function CornerstoneViewer({ filename, metadata }) {
     }
   }, [cornerstone, filename]);
 
+  useEffect(() => {
+    totalFramesRef.current = totalFrames;
+  }, [totalFrames]);
+
+  useEffect(() => {
+    currentFramesRef.current = currentFrame;
+  }, [currentFrame]);
+
+
+
   const initializeCornerstone = async () => {
     try {
       // Dynamic imports to avoid SSR issues
@@ -43,6 +57,8 @@ export default function CornerstoneViewer({ filename, metadata }) {
 
       // Configure cornerstone
       const cornerstone = cornerstoneCore.default || cornerstoneCore;
+      cornerstoneRef.current = cornerstone; // Store in ref for event handlers
+
       // Set up external references for all modules
       const hammer = Hammer.default || Hammer;
       const math = cornerstoneMath.default || cornerstoneMath;
@@ -111,8 +127,7 @@ export default function CornerstoneViewer({ filename, metadata }) {
         // Set initial tool
         cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
 
-        // Add scroll event for frame navigation
-        elementRef.current.addEventListener('wheel', handleScroll);
+        // Scroll event will be added in separate useEffect
       }
     } catch (error) {
       console.error('Error initializing Cornerstone:', error);
@@ -127,6 +142,7 @@ export default function CornerstoneViewer({ filename, metadata }) {
 
       // Check for multi-frame
       const frames = parseInt(metadata?.numberOfFrames || '1');
+      console.log("total frame new" + frames);
       setTotalFrames(frames);
 
       const finalImageId = frames > 1 ? `${imageId}#frame=${currentFrame}` : imageId;
@@ -143,36 +159,70 @@ export default function CornerstoneViewer({ filename, metadata }) {
     }
   };
 
-  const handleScroll = (e) => {
+
+
+  const handleScrollBarClick = (e) => {
     if (totalFrames <= 1) return;
 
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 1 : -1;
-    const newFrame = Math.max(0, Math.min(totalFrames - 1, currentFrame + delta));
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickY = e.clientY - rect.top;
+    const scrollBarHeight = rect.height;
 
-    if (newFrame !== currentFrame) {
-      setCurrentFrame(newFrame);
-      loadFrameImage(newFrame);
+    // Calculate which frame to go to based on click position
+    const percentage = clickY / scrollBarHeight;
+    const newFrame = Math.round(percentage * (totalFrames - 1));
+    const clampedFrame = Math.max(0, Math.min(totalFrames - 1, newFrame));
+
+    if (clampedFrame !== currentFrame) {
+      setCurrentFrame(clampedFrame);
+      loadFrameImage(clampedFrame);
     }
   };
 
-  const loadFrameImage = async (frameIndex) => {
-    if (!cornerstone || !elementRef.current) return;
+  const loadFrameImage = useCallback(async (frameIndex) => {
+    console.log("load frame " + frameIndex, cornerstoneRef.current, elementRef.current);
+    if (!cornerstoneRef.current || !elementRef.current) return;
 
     try {
       const imageId = `wadouri:/api/dicom-file/${filename}#frame=${frameIndex}`;
-      const image = await cornerstone.loadImage(imageId);
+      const image = await cornerstoneRef.current.loadImage(imageId);
 
       // Preserve viewport settings
       if (viewport) {
-        cornerstone.displayImage(elementRef.current, image, viewport);
+        cornerstoneRef.current.displayImage(elementRef.current, image, viewport);
       } else {
-        cornerstone.displayImage(elementRef.current, image);
+        cornerstoneRef.current.displayImage(elementRef.current, image);
       }
     } catch (error) {
       console.error('Error loading frame:', error);
     }
-  };
+  }, [filename, viewport]); // Add dependencies for useCallback
+
+  const handleScroll = useCallback((e) => {
+    console.log("ada scroll " + totalFramesRef.current);
+    if (totalFramesRef.current <= 1) return;
+
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 1 : -1;
+    const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + delta));
+    console.log(newFrame, currentFramesRef.current);
+
+    if (newFrame !== currentFramesRef.current) {
+      setCurrentFrame(newFrame);
+      loadFrameImage(newFrame);
+    }
+  }, [loadFrameImage]); // Add loadFrameImage as dependency
+
+  // Add scroll event listener when handleScroll is ready
+  useEffect(() => {
+    const element = elementRef.current;
+    if (element && handleScroll) {
+      element.addEventListener('wheel', handleScroll);
+      return () => {
+        element.removeEventListener('wheel', handleScroll);
+      };
+    }
+  }, [handleScroll]);
 
   const activateTool = (toolName) => {
     if (!cornerstoneTools) return;
