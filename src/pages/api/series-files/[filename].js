@@ -1,6 +1,7 @@
 import { getSeriesFiles } from '../../../lib/dicom';
+import { requireAuth, validatePatientFileAccess } from '../../../lib/auth-middleware';
 
-export default function handler(req, res) {
+async function handler(req, res) {
   const { filename } = req.query;
 
   if (req.method !== 'GET') {
@@ -8,7 +9,15 @@ export default function handler(req, res) {
   }
 
   try {
-    const seriesData = getSeriesFiles(filename);
+    // Validate patient access to the requested file
+    const validation = validatePatientFileAccess(req, filename);
+
+    if (!validation.isValid) {
+      return res.status(403).json({ error: validation.error });
+    }
+
+    // Use patient-specific file path
+    const seriesData = getSeriesFiles(validation.patientFilePath);
     res.status(200).json(seriesData);
   } catch (error) {
     console.error('Error getting series files:', error);
@@ -18,3 +27,5 @@ export default function handler(req, res) {
     res.status(500).json({ error: 'Error getting series files' });
   }
 }
+
+export default requireAuth(handler);

@@ -66,7 +66,7 @@ export default function ViewerPage() {
       <div className="viewer-page">
         <div className="back-button">
           {/* <Link href="/"> */}
-          <a>← Back to Gallery</a>
+          <button className="btn btn-primary" onClick={() => router.replace('/')}>← Back to Gallery</button>
           {/* </Link> */}
         </div>
 

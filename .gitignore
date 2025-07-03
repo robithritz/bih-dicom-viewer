@@ -47,3 +47,4 @@ src/generated/*
 logs/
 public/uploads/*
 deploy/*
+/src/generated/prisma

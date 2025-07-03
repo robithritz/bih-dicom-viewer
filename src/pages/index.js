@@ -1,20 +1,35 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '../components/Layout';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function Home() {
+export default function PatientPortal() {
+  const router = useRouter();
+  const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
   const [studies, setStudies] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    fetchStudies();
-  }, []);
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.patientId) {
+      fetchStudies();
+    }
+  }, [isAuthenticated, user]);
 
   const fetchStudies = async () => {
+    if (!user?.patientId) return;
+
     try {
       setLoading(true);
-      const response = await fetch('/api/studies');
+      const response = await fetch(`/api/studies?patient=${user.patientId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch studies');
       }
@@ -27,12 +42,28 @@ export default function Home() {
     }
   };
 
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="loading">Loading...</div>
+      </Layout>
+    );
+  }
+
+  // Don't render anything if not authenticated (will redirect)
+  if (!isAuthenticated) {
+    return null;
+  }
+
   if (loading) {
     return (
       <Layout>
-        <div className="header">
-          <h1>🏥 DICOM Medical Image Viewer</h1>
-          <p>Loading studies...</p>
+        <div className="container">
+          <div className="header">
+            <h1>🏥 Patient Portal</h1>
+            <p>Loading your medical imaging studies...</p>
+          </div>
         </div>
       </Layout>
     );
@@ -41,100 +72,82 @@ export default function Home() {
   if (error) {
     return (
       <Layout>
-        <div className="header">
-          <h1>🏥 DICOM Medical Image Viewer</h1>
-          <p style={{ color: 'red' }}>Error: {error}</p>
-          <button onClick={fetchStudies}>Retry</button>
+        <div className="container">
+          <div className="header">
+            <h1>🏥 Patient Portal</h1>
+            <p style={{ color: 'red' }}>Error: {error}</p>
+            <button onClick={fetchStudies}>Retry</button>
+          </div>
         </div>
       </Layout>
     );
   }
 
-  const studyEntries = Object.entries(studies);
-
   return (
     <Layout>
-      <div className="header">
-        <h1>🏥 DICOM Medical Image Viewer</h1>
-        <p>Professional Medical Imaging with Advanced Tools</p>
-        <p>Found {studyEntries.length} studies with comprehensive DICOM metadata</p>
-      </div>
-
-      {studyEntries.length === 0 ? (
-        <div className="container">
-          <p>No DICOM studies found. Please add DICOM files to the DICOM directory.</p>
-        </div>
-      ) : (
-        studyEntries.map(([studyUID, study]) => (
-          <div key={studyUID} className="study-section">
-            <h2 className="study-header">
-              📋 Study: {study.studyDescription}
-            </h2>
-
-            <div className="study-info">
-              <div className="info-row">
-                <span className="info-label">👤 Patient:</span>
-                <span className="info-value">{study.patientName} (ID: {study.patientID})</span>
+      <div className="container">
+        <div className="header">
+          <h1>🏥 Patient Portal</h1>
+          <p>Welcome, {user?.patientId} - View your medical imaging results</p>
+          <div className="header-actions">
+            <div className="auth-actions">
+              <div className="user-info">
+                <span className="welcome-text">Patient ID: {user?.patientId}</span>
+                <button onClick={logout} className="logout-button">
+                  Logout
+                </button>
               </div>
-              <div className="info-row">
-                <span className="info-label">📅 Study Date:</span>
-                <span className="info-value">{study.studyDate} at {study.studyTime}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">🔬 Study UID:</span>
-                <span className="info-value">{study.studyInstanceUID}</span>
-              </div>
-            </div>
-
-            <div className="series-grid">
-              {Object.entries(study.series).map(([seriesUID, series]) => (
-                <div key={seriesUID} className="series-card">
-                  <div className="series-header">
-                    <h3 className="series-title">
-                      📊 Series {series.seriesNumber}: {series.seriesDescription}
-                    </h3>
-                  </div>
-
-                  <div className="series-info">
-                    <div className="info-row">
-                      <span className="info-label">🏷️ Modality:</span>
-                      <span className="info-value">{series.modality}</span>
-                    </div>
-                    <div className="info-row">
-                      <span className="info-label">📸 Instances:</span>
-                      <span className="info-value">{series.instances.length}</span>
-                    </div>
-
-                    <div className="instances-list">
-                      {series.instances.map((instance, index) => (
-                        <div key={index} className="instance-item">
-                          <div>
-                            <div className="instance-filename">{instance.filename}</div>
-                            <small>{instance.rows}×{instance.columns} pixels</small>
-                          </div>
-                          <div>
-                            <span className="instance-number">#{instance.instanceNumber}</span>
-                            <Link className="view-button" href={`/viewer/${instance.filename}`} style={{
-                              marginLeft: '10px',
-                              padding: '6px 12px',
-                              fontSize: '12px',
-                              width: 'auto'
-                            }}>
-                              {/* <a className="view-button" > */}
-                              🔍 View
-                              {/* </a> */}
-                            </Link>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
-        ))
-      )}
+        </div>
+
+
+
+        {Object.keys(studies).length === 0 ? (
+          <div className="no-studies">
+            <h2>No DICOM studies found</h2>
+            <p>Your medical imaging results will appear here once they are uploaded by your healthcare provider.</p>
+            <p>If you believe there should be studies available, please contact your healthcare provider.</p>
+          </div>
+        ) : (
+          <div className="studies-grid">
+            {Object.entries(studies).map(([filename, study]) => (
+              <div key={filename} className="study-card">
+                <div className="study-thumbnail">
+                  {study.thumbnail ? (
+                    <img
+                      src={`data:image/png;base64,${study.thumbnail}`}
+                      alt="DICOM Preview"
+                      className="thumbnail-image"
+                    />
+                  ) : (
+                    <div className="thumbnail-placeholder">
+                      📊 DICOM
+                    </div>
+                  )}
+                </div>
+                <div className="study-info">
+                  <h3>{study.patientName || 'Medical Study'}</h3>
+                  <div className="study-details">
+                    <p><strong>Study Date:</strong> {study.studyDate || 'N/A'}</p>
+                    <p><strong>Modality:</strong> {study.modality || 'N/A'}</p>
+                    <p><strong>Description:</strong> {study.studyDescription || 'N/A'}</p>
+                    {study.numberOfFrames && (
+                      <p><strong>Frames:</strong> {study.numberOfFrames}</p>
+                    )}
+                  </div>
+                  <Link
+                    href={`/viewer/${encodeURIComponent(filename)}`}
+                    className="view-button"
+                  >
+                    View Study
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Layout>
   );
 }

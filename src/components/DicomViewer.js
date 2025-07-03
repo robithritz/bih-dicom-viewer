@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 
 // Dynamically import cornerstone to avoid SSR issues
@@ -11,6 +12,7 @@ export default function DicomViewer({ filename }) {
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (filename) {
@@ -23,11 +25,15 @@ export default function DicomViewer({ filename }) {
       setLoading(true);
       const response = await fetch(`/api/dicom-info/${filename}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch DICOM metadata');
+        if (response.status == 401) {
+          router.replace('/login');
+        }
+        throw new Error('Failed to fetch DICOM metadata', response);
       }
       const data = await response.json();
       setMetadata(data);
     } catch (err) {
+      console.log(err);
       setError(err.message);
     } finally {
       setLoading(false);

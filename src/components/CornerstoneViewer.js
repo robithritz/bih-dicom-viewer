@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRouter } from 'next/router';
 import Toolbar from './Toolbar';
 import FileBrowser from './FileBrowser';
 
 export default function CornerstoneViewer({ filename, metadata }) {
   const elementRef = useRef(null);
+  const router = useRouter();
   const [cornerstone, setCornerstone] = useState(null);
   const [cornerstoneTools, setCornerstoneTools] = useState(null);
   const [currentTool, setCurrentTool] = useState('wwwc');
@@ -142,7 +144,6 @@ export default function CornerstoneViewer({ filename, metadata }) {
 
       // Check for multi-frame
       const frames = parseInt(metadata?.numberOfFrames || '1');
-      console.log("total frame new" + frames);
       setTotalFrames(frames);
 
       const finalImageId = frames > 1 ? `${imageId}#frame=${currentFrame}` : imageId;
@@ -180,7 +181,6 @@ export default function CornerstoneViewer({ filename, metadata }) {
   };
 
   const loadFrameImage = useCallback(async (frameIndex) => {
-    console.log("load frame " + frameIndex, cornerstoneRef.current, elementRef.current);
     if (!cornerstoneRef.current || !elementRef.current) return;
 
     try {
@@ -199,13 +199,11 @@ export default function CornerstoneViewer({ filename, metadata }) {
   }, [filename, viewport]); // Add dependencies for useCallback
 
   const handleScroll = useCallback((e) => {
-    console.log("ada scroll " + totalFramesRef.current);
     if (totalFramesRef.current <= 1) return;
 
     e.preventDefault();
     const delta = e.deltaY > 0 ? 1 : -1;
     const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + delta));
-    console.log(newFrame, currentFramesRef.current);
 
     if (newFrame !== currentFramesRef.current) {
       setCurrentFrame(newFrame);

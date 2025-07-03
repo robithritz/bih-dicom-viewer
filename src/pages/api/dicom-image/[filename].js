@@ -1,6 +1,7 @@
 import { parseDicomFile } from '../../../lib/dicom';
+import { requireAuth, validatePatientFileAccess } from '../../../lib/auth-middleware';
 
-export default function handler(req, res) {
+async function handler(req, res) {
   const { filename } = req.query;
 
   if (req.method !== 'GET') {
@@ -8,7 +9,15 @@ export default function handler(req, res) {
   }
 
   try {
-    const dataSet = parseDicomFile(filename);
+    // Validate patient access to the requested file
+    const validation = validatePatientFileAccess(req, filename);
+
+    if (!validation.isValid) {
+      return res.status(403).json({ error: validation.error });
+    }
+
+    // Use patient-specific file path
+    const dataSet = parseDicomFile(validation.patientFilePath);
 
     // Get comprehensive image information
     const rows = dataSet.uint16('x00280010');
@@ -40,3 +49,5 @@ export default function handler(req, res) {
     res.status(500).json({ error: 'Error extracting image data' });
   }
 }
+
+export default requireAuth(handler);

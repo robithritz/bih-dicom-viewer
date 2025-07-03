@@ -4,10 +4,49 @@ import dicomParser from 'dicom-parser';
 
 export const DICOM_DIR = path.join(process.cwd(), 'DICOM');
 
-export function getDicomFiles() {
+export function getDicomFiles(patientId = null) {
   try {
-    const files = fs.readdirSync(DICOM_DIR);
-    return files.filter(file => file.toLowerCase().endsWith('.dcm'));
+    if (patientId) {
+      // Look for files in patient-specific directory
+      const patientDir = path.join(DICOM_DIR, patientId);
+      if (fs.existsSync(patientDir)) {
+        const files = fs.readdirSync(patientDir);
+        return files
+          .filter(file => file.toLowerCase().endsWith('.dcm') || file.toLowerCase().endsWith('.dicom'))
+          .map(file => path.join(patientId, file)); // Include patient folder in path
+      }
+      return [];
+    } else {
+      // Get all DICOM files from all directories
+      const allFiles = [];
+
+      // Get files from root DICOM directory
+      if (fs.existsSync(DICOM_DIR)) {
+        const rootFiles = fs.readdirSync(DICOM_DIR);
+        rootFiles.forEach(item => {
+          const itemPath = path.join(DICOM_DIR, item);
+          const stat = fs.statSync(itemPath);
+
+          if (stat.isFile() && (item.toLowerCase().endsWith('.dcm') || item.toLowerCase().endsWith('.dicom'))) {
+            allFiles.push(item);
+          } else if (stat.isDirectory()) {
+            // Check patient subdirectories
+            try {
+              const subFiles = fs.readdirSync(itemPath);
+              subFiles.forEach(subFile => {
+                if (subFile.toLowerCase().endsWith('.dcm') || subFile.toLowerCase().endsWith('.dicom')) {
+                  allFiles.push(path.join(item, subFile));
+                }
+              });
+            } catch (err) {
+              console.warn(`Error reading subdirectory ${item}:`, err);
+            }
+          }
+        });
+      }
+
+      return allFiles;
+    }
   } catch (error) {
     console.error('Error reading DICOM directory:', error);
     return [];
@@ -20,10 +59,10 @@ export function parseDicomFile(filename) {
     if (!fs.existsSync(filePath)) {
       throw new Error('File not found');
     }
-    
+
     const dicomFileAsBuffer = fs.readFileSync(filePath);
     const dataSet = dicomParser.parseDicom(dicomFileAsBuffer);
-    
+
     return dataSet;
   } catch (error) {
     console.error(`Error parsing DICOM file ${filename}:`, error);
@@ -60,6 +99,70 @@ export function extractDicomMetadata(dataSet) {
   };
 }
 
+function generateThumbnail(dataSet) {
+  try {
+    const pixelData = dataSet.byteArray.slice(
+      dataSet.elements.x7fe00010.dataOffset,
+      dataSet.elements.x7fe00010.dataOffset + dataSet.elements.x7fe00010.length
+    );
+
+    const rows = parseInt(dataSet.string('x00280010'));
+    const columns = parseInt(dataSet.string('x00280011'));
+    const bitsAllocated = parseInt(dataSet.string('x00280100')) || 16;
+
+    if (!pixelData || !rows || !columns) {
+      return null;
+    }
+
+    // Create a simple thumbnail by sampling pixels
+    const thumbnailSize = 64;
+    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+
+    if (!canvas) {
+      return null; // Server-side, can't generate canvas thumbnail
+    }
+
+    canvas.width = thumbnailSize;
+    canvas.height = thumbnailSize;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.createImageData(thumbnailSize, thumbnailSize);
+
+    const stepX = Math.floor(columns / thumbnailSize);
+    const stepY = Math.floor(rows / thumbnailSize);
+    const bytesPerPixel = bitsAllocated / 8;
+
+    for (let y = 0; y < thumbnailSize; y++) {
+      for (let x = 0; x < thumbnailSize; x++) {
+        const sourceX = x * stepX;
+        const sourceY = y * stepY;
+        const sourceIndex = (sourceY * columns + sourceX) * bytesPerPixel;
+
+        let pixelValue = 0;
+        if (bytesPerPixel === 2) {
+          pixelValue = pixelData[sourceIndex] | (pixelData[sourceIndex + 1] << 8);
+        } else {
+          pixelValue = pixelData[sourceIndex];
+        }
+
+        // Normalize to 0-255 range
+        const normalizedValue = Math.min(255, Math.max(0, pixelValue / (bitsAllocated === 16 ? 256 : 1)));
+
+        const targetIndex = (y * thumbnailSize + x) * 4;
+        imageData.data[targetIndex] = normalizedValue;     // R
+        imageData.data[targetIndex + 1] = normalizedValue; // G
+        imageData.data[targetIndex + 2] = normalizedValue; // B
+        imageData.data[targetIndex + 3] = 255;             // A
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png').split(',')[1]; // Return base64 without prefix
+  } catch (error) {
+    console.warn('Thumbnail generation failed:', error);
+    return null;
+  }
+}
+
 export function organizeDicomStudies(files) {
   const studies = {};
 
@@ -68,49 +171,38 @@ export function organizeDicomStudies(files) {
       const dataSet = parseDicomFile(file);
       const metadata = extractDicomMetadata(dataSet);
 
-      // Organize by study
-      if (!studies[metadata.studyInstanceUID]) {
-        studies[metadata.studyInstanceUID] = {
-          studyInstanceUID: metadata.studyInstanceUID,
-          patientName: metadata.patientName,
-          patientID: metadata.patientID,
-          studyDate: metadata.studyDate,
-          studyTime: metadata.studyTime,
-          studyDescription: metadata.studyDescription,
-          series: {}
-        };
+      // Generate thumbnail for the file
+      let thumbnail = null;
+      try {
+        thumbnail = generateThumbnail(dataSet);
+      } catch (thumbnailError) {
+        console.warn(`Failed to generate thumbnail for ${file}:`, thumbnailError);
       }
 
-      // Organize by series within study
-      if (!studies[metadata.studyInstanceUID].series[metadata.seriesInstanceUID]) {
-        studies[metadata.studyInstanceUID].series[metadata.seriesInstanceUID] = {
-          seriesInstanceUID: metadata.seriesInstanceUID,
-          seriesNumber: parseInt(metadata.seriesNumber),
-          seriesDescription: metadata.seriesDescription,
-          modality: metadata.modality,
-          instances: []
-        };
-      }
-
-      // Add instance to series
-      studies[metadata.studyInstanceUID].series[metadata.seriesInstanceUID].instances.push({
+      // Use filename as key for direct viewer access
+      studies[file] = {
         filename: file,
+        studyInstanceUID: metadata.studyInstanceUID,
+        seriesInstanceUID: metadata.seriesInstanceUID,
+        patientName: metadata.patientName,
+        patientID: metadata.patientID,
+        studyDate: metadata.studyDate,
+        studyTime: metadata.studyTime,
+        studyDescription: metadata.studyDescription,
+        seriesDescription: metadata.seriesDescription,
+        modality: metadata.modality,
         instanceNumber: parseInt(metadata.instanceNumber),
+        seriesNumber: parseInt(metadata.seriesNumber),
         rows: metadata.rows,
-        columns: metadata.columns
-      });
+        columns: metadata.columns,
+        numberOfFrames: metadata.numberOfFrames,
+        thumbnail: thumbnail
+      };
 
     } catch (error) {
       console.error(`Error processing ${file}:`, error.message);
     }
   }
-
-  // Sort instances within each series by instance number
-  Object.values(studies).forEach(study => {
-    Object.values(study.series).forEach(series => {
-      series.instances.sort((a, b) => a.instanceNumber - b.instanceNumber);
-    });
-  });
 
   return studies;
 }

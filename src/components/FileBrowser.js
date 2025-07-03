@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DicomThumbnail from './DicomThumbnail';
 
 export default function FileBrowser({ currentFile, onFileSelect, onClose }) {
   const [files, setFiles] = useState([]);
@@ -55,10 +56,12 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose }) {
             onClick={() => onFileSelect(file.name)}
             title={`Click to view ${file.name}`}
           >
-            <div className="file-icon">📄</div>
+            {/* <div className="file-thumbnail">
+              <DicomThumbnail filename={file.name} size={120} />
+            </div> */}
             <div className="file-info">
               <div className="file-name">{file.name}</div>
-              <div className="file-path">{file.path}</div>
+              <div className="file-size">{file.size ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : ''}</div>
             </div>
             {file.name === currentFile && (
               <div className="current-indicator">👁️</div>

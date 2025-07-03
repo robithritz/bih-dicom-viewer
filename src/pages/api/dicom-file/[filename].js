@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { DICOM_DIR } from '../../../lib/dicom';
+import { requireAuth, validatePatientFileAccess } from '../../../lib/auth-middleware';
 
-export default function handler(req, res) {
+async function handler(req, res) {
   const { filename } = req.query;
 
   // Handle CORS preflight requests
@@ -18,9 +19,17 @@ export default function handler(req, res) {
   }
 
   try {
-    const filePath = path.join(DICOM_DIR, filename);
+    // Validate patient access to the requested file
+    const validation = validatePatientFileAccess(req, filename);
 
-    console.log('Serving DICOM file:', filename, 'from path:', filePath);
+    if (!validation.isValid) {
+      return res.status(403).json({ error: validation.error });
+    }
+
+    // Use patient-specific file path
+    const filePath = path.join(DICOM_DIR, validation.patientFilePath);
+
+    console.log('Serving DICOM file for patient:', req.patient.patientId, 'filename:', filename, 'from path:', filePath);
 
     if (!fs.existsSync(filePath)) {
       console.error('DICOM file not found:', filePath);
@@ -43,3 +52,5 @@ export default function handler(req, res) {
     res.status(500).json({ error: 'Error serving DICOM file' });
   }
 }
+
+export default requireAuth(handler);

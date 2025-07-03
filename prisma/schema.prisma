@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+// OTP model for email authentication
+model Otp {
+  id              Int      @id @default(autoincrement())
+  email           String   @db.VarChar(255)
+  sessionId       String   @unique @map("session_id") @db.VarChar(255)
+  otp             String   @db.VarChar(10)
+  createdAt       DateTime @default(now()) @map("created_at")
+  expiresAt       DateTime @map("expires_at")
+  verified        Boolean  @default(false)
+  retryCount      Int      @default(1) @map("retry_count")
+  attempts        Int      @default(0)
+  lastRequestTime DateTime @default(now()) @map("last_request_time")
+
+  @@index([email])
+  @@index([sessionId])
+  @@index([expiresAt])
+  @@map("otps")
+}
+
+// DICOM Patient model for patient authentication and file access
+model DicomPatient {
+  id          Int       @id @default(autoincrement())
+  patientId   String    @unique @map("patient_id") @db.VarChar(50)
+  email       String    @unique @db.VarChar(255)
+  name        String?   @db.VarChar(255)
+  phone       String?   @db.VarChar(50)
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+  gender      String?   @db.VarChar(10)
+  address     String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  lastLogin   DateTime? @map("last_login")
+  isActive    Boolean   @default(true) @map("is_active")
+
+  @@index([email])
+  @@index([patientId])
+  @@map("dicom_patients")
+}
+
+// User model for admin portal authentication (existing table)
+model User {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name            String    @db.VarChar(255)
+  email           String    @unique @db.VarChar(255)
+  role            UserRole  @default(backoffice)
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  password        String    @db.VarChar(255)
+  rememberToken   String?   @map("remember_token") @db.VarChar(100)
+  createdAt       DateTime? @default(now()) @map("created_at")
+  updatedAt       DateTime? @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+enum UserRole {
+  superadmin
+  backoffice
+  kitchen
+}
