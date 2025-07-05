@@ -9,8 +9,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get token from cookie
-    const token = req.cookies['auth-token'];
+    // Get token from Authorization header or cookie (for backward compatibility)
+    let token = req.cookies['auth-token'];
+
+    // Check Authorization header first
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
 
     if (!token) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -30,8 +36,10 @@ export default async function handler(req, res) {
       success: true,
       patient: {
         email: patient.email,
-        patientId: patient.patientId,
-        lastLogin: patient.lastLogin
+        patientId: patient.psid,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        updatedAt: patient.updatedAt
       }
     });
 

@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       success: true,
       message: 'Verification code sent to your email',
       sessionId: otpSession.sessionId,
-      expiresAt: new Date(Date.now() + (parseInt(process.env.OTP_EXPIRED_TIME_IN_SECOND) || 300) * 1000).toISOString(),
+      expiresAt: Date.now() + (parseInt(process.env.OTP_EXPIRED_TIME_IN_SECOND) || 300) * 1000,
       retryCount: 1,
       maxRetries: parseInt(process.env.OTP_MAX_RETRY) || 5
     });

@@ -11,14 +11,16 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 export const verifyAdminSession = async (req) => {
   try {
     // Get token from cookie
-    const token = req.cookies['admin-auth-token'];
+    const token = req.headers['authorization']?.split(' ')?.[1];
 
+    console.log("ada token nya" + token);
     if (!token) {
       return null;
     }
 
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log("decoded token nya" + decoded);
 
     // Get user data from database
     const user = await getUserByEmail(decoded.email);
@@ -69,7 +71,7 @@ export const requireAdminAuth = (handler) => {
  */
 export const requireAdminRole = (allowedRoles) => {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
-  
+
   return (handler) => {
     return async (req, res) => {
       const user = await verifyAdminSession(req);

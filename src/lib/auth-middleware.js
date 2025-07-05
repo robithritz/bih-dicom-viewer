@@ -11,8 +11,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
  */
 export const verifyPatientSession = async (req) => {
   try {
-    // Get token from cookie
-    const token = req.cookies['auth-token'];
+    // Get token from Authorization header or cookie (for backward compatibility)
+    let token = req.cookies['auth-token'];
+
+    // Check Authorization header first
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
 
     if (!token) {
       return null;
@@ -28,14 +34,12 @@ export const verifyPatientSession = async (req) => {
       return null;
     }
 
-    if (!patient.isActive) {
-      return null;
-    }
-
     return {
       email: patient.email,
-      patientId: patient.patientId,
-      lastLogin: patient.lastLogin
+      patientId: patient.psid, // Use psid as patient ID
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      updatedAt: patient.updatedAt
     };
 
   } catch (error) {
@@ -162,8 +166,14 @@ export const validatePatientFileAccess = (req, filename) => {
 export const requireAdminAuth = (handler) => {
   return async (req, res) => {
     try {
-      // Get admin token from cookie
-      const token = req.cookies['admin-auth-token'];
+      // Get admin token from Authorization header or cookie (for backward compatibility)
+      let token = req.cookies['admin-auth-token'];
+
+      // Check Authorization header first
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
 
       if (!token) {
         return res.status(401).json({ error: 'Admin authentication required' });

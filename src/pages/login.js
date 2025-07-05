@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [expiresAt, setExpiresAt] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries, setMaxRetries] = useState(5);
+  const [timeLeft, setTimeLeft] = useState(0);
 
   const { isAuthenticated, loading: authLoading, checkAuth } = useAuth();
   const router = useRouter();
@@ -25,6 +26,29 @@ export default function LoginPage() {
       router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
+
+  // Countdown timer for OTP expiration
+  useEffect(() => {
+    let interval;
+
+    if (expiresAt && step === 'otp') {
+      interval = setInterval(() => {
+        const now = Date.now();
+        const remaining = Math.max(0, expiresAt - now);
+        setTimeLeft(remaining);
+
+        if (remaining <= 0) {
+          clearInterval(interval);
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [expiresAt, step]);
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
@@ -44,10 +68,12 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (data.success) {
+        console.log("data otp", data);
         setSessionId(data.sessionId);
         setExpiresAt(data.expiresAt);
         setRetryCount(data.retryCount);
         setMaxRetries(data.maxRetries);
+        setTimeLeft(data.expiresAt - Date.now()); // Initialize countdown
         setStep('otp');
         setSuccess('Verification code sent to your email');
       } else {
@@ -79,6 +105,11 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (data.success) {
+        // Store token in localStorage
+        if (data.token) {
+          localStorage.setItem('auth-token', data.token);
+        }
+
         // Refresh authentication state before redirecting
         await checkAuth();
         router.replace('/');
@@ -113,6 +144,7 @@ export default function LoginPage() {
         setExpiresAt(data.expiresAt);
         setRetryCount(data.retryCount);
         setMaxRetries(data.maxRetries);
+        setTimeLeft(data.expiresAt - Date.now()); // Reset countdown
         setSuccess('New verification code sent to your email');
         setOtp(''); // Clear previous OTP
       } else {
@@ -131,6 +163,14 @@ export default function LoginPage() {
     setSessionId('');
     setError('');
     setSuccess('');
+  };
+
+  // Format time remaining as MM:SS
+  const formatTimeLeft = (milliseconds) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   if (authLoading) {
@@ -205,7 +245,11 @@ export default function LoginPage() {
               <p>We've sent a 6-digit verification code to:</p>
               <strong>{email}</strong>
               <p className="otp-expires">
-                Code expires in {expiresAt ? Math.max(0, Math.ceil((expiresAt - Date.now()) / 60000)) : 5} minutes
+                {timeLeft > 0 ? (
+                  <>Code expires in {formatTimeLeft(timeLeft)}</>
+                ) : (
+                  <span style={{ color: '#e74c3c' }}>Code has expired</span>
+                )}
               </p>
             </div>
 
@@ -218,7 +262,7 @@ export default function LoginPage() {
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 required
                 disabled={loading}
-                placeholder="Enter 6-digit code"
+                placeholder="Enter OTP"
                 maxLength="6"
                 className="otp-input"
               />
@@ -242,14 +286,14 @@ export default function LoginPage() {
                 {loading ? 'Sending...' : `Resend Code (${retryCount}/${maxRetries})`}
               </button>
 
-              <button
+              {/* <button
                 type="button"
                 onClick={handleBackToEmail}
                 disabled={loading}
                 className="back-button"
               >
                 ← Change Email
-              </button>
+              </button> */}
             </div>
           </form>
         )}

@@ -55,21 +55,22 @@ export default async function handler(req, res) {
     const token = jwt.sign(
       {
         email: patient.email,
-        patientId: patient.patientId
+        patientId: patient.psid // Use psid as patient ID
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Set HTTP-only cookie
-    res.setHeader('Set-Cookie', `auth-token=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Strict`);
-
+    // Return token in response for localStorage storage
     res.status(200).json({
       success: true,
       message: 'Login successful',
+      token: token,
       patient: {
         email: patient.email,
-        patientId: patient.patientId
+        patientId: patient.psid,
+        firstName: patient.firstName,
+        lastName: patient.lastName
       }
     });
 

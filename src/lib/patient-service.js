@@ -6,8 +6,8 @@ import prisma from './prisma.js';
 export const getPatientByEmail = async (email) => {
   try {
     const normalizedEmail = email.toLowerCase().trim();
-    
-    const patient = await prisma.dicomPatient.findUnique({
+
+    const patient = await prisma.patient.findFirst({
       where: { email: normalizedEmail }
     });
 
@@ -19,12 +19,12 @@ export const getPatientByEmail = async (email) => {
 };
 
 /**
- * Get patient by patient ID
+ * Get patient by patient ID (psid)
  */
 export const getPatientById = async (patientId) => {
   try {
-    const patient = await prisma.dicomPatient.findUnique({
-      where: { patientId: patientId }
+    const patient = await prisma.patient.findUnique({
+      where: { psid: patientId }
     });
 
     return patient;
@@ -35,50 +35,32 @@ export const getPatientById = async (patientId) => {
 };
 
 /**
- * Create or update patient
+ * Create or update patient (Note: Patient table is read-only, patients should exist)
  */
 export const createOrUpdatePatient = async (patientData) => {
   try {
     const normalizedEmail = patientData.email.toLowerCase().trim();
-    
+
     // Check if patient exists by email
-    const existingPatient = await prisma.dicomPatient.findUnique({
+    const existingPatient = await prisma.patient.findFirst({
       where: { email: normalizedEmail }
     });
 
     if (existingPatient) {
-      // Update existing patient
-      const updatedPatient = await prisma.dicomPatient.update({
-        where: { email: normalizedEmail },
+      // Update existing patient (only updatedAt timestamp)
+      const updatedPatient = await prisma.patient.update({
+        where: { idPatients: existingPatient.idPatients },
         data: {
-          name: patientData.name || existingPatient.name,
-          phone: patientData.phone || existingPatient.phone,
-          dateOfBirth: patientData.dateOfBirth || existingPatient.dateOfBirth,
-          gender: patientData.gender || existingPatient.gender,
-          address: patientData.address || existingPatient.address,
-          lastLogin: new Date(),
-          isActive: patientData.isActive !== undefined ? patientData.isActive : existingPatient.isActive
+          updatedAt: new Date()
         }
       });
-      
+
       return updatedPatient;
     } else {
-      // Create new patient
-      const newPatient = await prisma.dicomPatient.create({
-        data: {
-          patientId: patientData.patientId,
-          email: normalizedEmail,
-          name: patientData.name || null,
-          phone: patientData.phone || null,
-          dateOfBirth: patientData.dateOfBirth || null,
-          gender: patientData.gender || null,
-          address: patientData.address || null,
-          lastLogin: new Date(),
-          isActive: patientData.isActive !== undefined ? patientData.isActive : true
-        }
-      });
-      
-      return newPatient;
+      // Patient doesn't exist - this should not happen in normal flow
+      // Return null to indicate patient not found
+      console.warn('Patient not found for email:', normalizedEmail);
+      return null;
     }
   } catch (error) {
     console.error('Error creating/updating patient:', error);
@@ -87,18 +69,25 @@ export const createOrUpdatePatient = async (patientData) => {
 };
 
 /**
- * Update patient last login
+ * Update patient last login (updates updatedAt timestamp)
  */
 export const updatePatientLastLogin = async (email) => {
   try {
     const normalizedEmail = email.toLowerCase().trim();
-    
-    const updatedPatient = await prisma.dicomPatient.update({
-      where: { email: normalizedEmail },
-      data: { lastLogin: new Date() }
+
+    const patient = await prisma.patient.findFirst({
+      where: { email: normalizedEmail }
     });
 
-    return updatedPatient;
+    if (patient) {
+      const updatedPatient = await prisma.patient.update({
+        where: { idPatients: patient.idPatients },
+        data: { updatedAt: new Date() }
+      });
+      return updatedPatient;
+    }
+
+    return null;
   } catch (error) {
     console.error('Error updating patient last login:', error);
     return null;
@@ -111,14 +100,14 @@ export const updatePatientLastLogin = async (email) => {
 export const getAllPatients = async (page = 1, limit = 50) => {
   try {
     const skip = (page - 1) * limit;
-    
+
     const [patients, total] = await Promise.all([
-      prisma.dicomPatient.findMany({
+      prisma.patient.findMany({
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' }
       }),
-      prisma.dicomPatient.count()
+      prisma.patient.count()
     ]);
 
     return {
@@ -141,13 +130,14 @@ export const getAllPatients = async (page = 1, limit = 50) => {
 };
 
 /**
- * Deactivate patient
+ * Deactivate patient (Note: Patient table doesn't have isActive field)
  */
 export const deactivatePatient = async (patientId) => {
   try {
-    const updatedPatient = await prisma.dicomPatient.update({
-      where: { patientId },
-      data: { isActive: false }
+    // Since Patient table doesn't have isActive, we just update the timestamp
+    const updatedPatient = await prisma.patient.update({
+      where: { psid: patientId },
+      data: { updatedAt: new Date() }
     });
 
     return updatedPatient;
@@ -158,13 +148,14 @@ export const deactivatePatient = async (patientId) => {
 };
 
 /**
- * Activate patient
+ * Activate patient (Note: Patient table doesn't have isActive field)
  */
 export const activatePatient = async (patientId) => {
   try {
-    const updatedPatient = await prisma.dicomPatient.update({
-      where: { patientId },
-      data: { isActive: true }
+    // Since Patient table doesn't have isActive, we just update the timestamp
+    const updatedPatient = await prisma.patient.update({
+      where: { psid: patientId },
+      data: { updatedAt: new Date() }
     });
 
     return updatedPatient;

@@ -34,12 +34,26 @@ export default function AdminPortal() {
 
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch('/api/admin/auth/me');
+      const token = localStorage.getItem('admin-auth-token');
+      if (!token) {
+        setIsAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/admin/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
         setIsAuthenticated(true);
       } else {
+        // Invalid token, remove it
+        localStorage.removeItem('admin-auth-token');
         setIsAuthenticated(false);
       }
     } catch (error) {
@@ -67,6 +81,11 @@ export default function AdminPortal() {
       const data = await response.json();
 
       if (response.ok) {
+        // Store token in localStorage
+        if (data.token) {
+          localStorage.setItem('admin-auth-token', data.token);
+        }
+
         setUser(data.user);
         setIsAuthenticated(true);
         setLoginForm({ email: '', password: '' });
@@ -83,20 +102,37 @@ export default function AdminPortal() {
 
   const handleLogout = async () => {
     try {
+      // Clear token from localStorage
+      localStorage.removeItem('admin-auth-token');
+
+      // Optional: Call logout API
       await fetch('/api/admin/auth/logout', { method: 'POST' });
+
       setUser(null);
       setIsAuthenticated(false);
       setStudies({});
     } catch (error) {
       console.error('Logout error:', error);
+      // Still clear state even if API call fails
+      localStorage.removeItem('admin-auth-token');
+      setUser(null);
+      setIsAuthenticated(false);
+      setStudies({});
     }
   };
 
   const fetchStudies = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('admin-auth-token');
       const url = selectedPatient ? `/api/admin/studies?patient=${selectedPatient}` : '/api/admin/studies';
-      const response = await fetch(url);
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
       if (!response.ok) {
         throw new Error('Failed to fetch studies');
       }
@@ -197,11 +233,11 @@ export default function AdminPortal() {
                 </button>
               </div>
             </form>
-            <div className="text-center">
+            {/* <div className="text-center">
               <Link href="/" className="text-indigo-600 hover:text-indigo-500">
                 ← Back to Patient Portal
               </Link>
-            </div>
+            </div> */}
           </div>
         </div>
       </Layout>
@@ -262,9 +298,9 @@ export default function AdminPortal() {
             </div>
           )}
 
-          <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+          {/* <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
             Patient Portal →
-          </Link>
+          </Link> */}
         </div>
 
         {Object.keys(filteredStudies).length === 0 ? (

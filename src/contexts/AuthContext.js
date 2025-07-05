@@ -23,19 +23,46 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('/api/auth/me');
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.patient);
-      } else {
-        // try for admin auth me
-        const response = await fetch('/api/admin/auth/me');
+      // Check which type of auth token is present in localStorage
+      const adminToken = localStorage.getItem('admin-auth-token');
+      const patientToken = localStorage.getItem('auth-token');
+
+      console.log("masuk checkauth ", { adminToken: !!adminToken, patientToken: !!patientToken });
+
+      const pathname = router.pathname;
+      if (adminToken && pathname.includes('/portal')) {
+        // Check admin authentication
+        const response = await fetch('/api/admin/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${adminToken}`
+          }
+        });
         if (response.ok) {
           const data = await response.json();
           setUser(data.user);
         } else {
+          // Invalid token, remove it
+          localStorage.removeItem('admin-auth-token');
           setUser(null);
         }
+      } else if (patientToken) {
+        // Check patient authentication
+        const response = await fetch('/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${patientToken}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.patient);
+        } else {
+          // Invalid token, remove it
+          localStorage.removeItem('auth-token');
+          setUser(null);
+        }
+      } else {
+        // No auth tokens present
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -70,16 +97,24 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Clear tokens from localStorage
+      localStorage.removeItem('admin-auth-token');
+      localStorage.removeItem('auth-token');
+
+      // Optional: Call logout API to invalidate server-side sessions
       await fetch('/api/auth/logout', {
         method: 'POST',
       });
+
       setUser(null);
-      router.push('/login');
+      router.push('/');
     } catch (error) {
       console.error('Logout failed:', error);
-      // Still clear user state even if API call fails
+      // Still clear user state and tokens even if API call fails
+      localStorage.removeItem('admin-auth-token');
+      localStorage.removeItem('auth-token');
       setUser(null);
-      router.push('/login');
+      router.push('/');
     }
   };
 

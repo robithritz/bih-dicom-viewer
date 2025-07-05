@@ -10,8 +10,8 @@ export default async function handler(req, res) {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ 
-        error: 'Email and password are required' 
+      return res.status(400).json({
+        error: 'Email and password are required'
       });
     }
 
@@ -19,8 +19,8 @@ export default async function handler(req, res) {
     const authResult = await authenticateUser(email, password);
 
     if (!authResult.success) {
-      return res.status(401).json({ 
-        error: authResult.error 
+      return res.status(401).json({
+        error: authResult.error
       });
     }
 
@@ -29,16 +29,11 @@ export default async function handler(req, res) {
     // Generate JWT token
     const token = generateAdminToken(user);
 
-    // Set HTTP-only cookie
-    res.setHeader('Set-Cookie', [
-      `admin-auth-token=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Strict${
-        process.env.NODE_ENV === 'production' ? '; Secure' : ''
-      }`
-    ]);
-
+    // Return token in response for localStorage storage
     res.status(200).json({
       success: true,
       message: 'Login successful',
+      token: token,
       user: {
         id: user.id,
         name: user.name,
@@ -49,8 +44,8 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Admin login error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error during login' 
+    res.status(500).json({
+      error: 'Internal server error during login'
     });
   }
 }

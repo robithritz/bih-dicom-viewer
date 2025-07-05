@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react';
+import { uploadFilesChunked } from '../lib/chunked-upload';
 
 export default function FolderUpload({ onUploadComplete }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [chunkProgress, setChunkProgress] = useState(null);
   const [patientId, setPatientId] = useState('');
   const fileInputRef = useRef(null);
 
@@ -20,10 +22,10 @@ export default function FolderUpload({ onUploadComplete }) {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const items = e.dataTransfer.items;
     const files = [];
-    
+
     // Process dropped items
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -34,7 +36,7 @@ export default function FolderUpload({ onUploadComplete }) {
         }
       }
     }
-    
+
     if (files.length > 0) {
       handleUpload(files);
     } else {
@@ -43,10 +45,10 @@ export default function FolderUpload({ onUploadComplete }) {
   };
 
   const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files).filter(file => 
+    const files = Array.from(e.target.files).filter(file =>
       file.name.endsWith('.dcm') || file.name.endsWith('.dicom')
     );
-    
+
     if (files.length > 0) {
       handleUpload(files);
     } else {
@@ -67,62 +69,76 @@ export default function FolderUpload({ onUploadComplete }) {
 
     setIsUploading(true);
     setUploadProgress({ current: 0, total: files.length });
+    setChunkProgress(null);
 
     try {
-      const formData = new FormData();
-      formData.append('patientId', patientId.trim());
-      
-      files.forEach((file) => {
-        formData.append('files', file);
-      });
+      // Calculate total size for progress tracking
+      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+      console.log(`Starting chunked upload of ${files.length} files (${(totalSize / 1024 / 1024).toFixed(2)} MB total)`);
 
-      const response = await fetch('/api/upload-folder', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
+      const result = await uploadFilesChunked(files, patientId.trim(), (progress) => {
+        // Update overall progress
         setUploadProgress({
-          current: result.successCount,
-          total: result.totalFiles,
-          success: result.successCount,
-          errors: result.errorCount
+          current: progress.currentFile - 1,
+          total: progress.totalFiles,
+          currentFile: progress.currentFile,
+          currentFileName: progress.currentFileName,
+          overallPercentage: progress.overallPercentage
         });
 
-        // Show detailed results
-        if (result.errorCount > 0) {
-          const errorFiles = result.results
-            .filter(r => r.status === 'error')
-            .map(r => `${r.filename}: ${r.message}`)
-            .join('\n');
-          alert(`Upload completed with errors:\n\nSuccessful: ${result.successCount}\nFailed: ${result.errorCount}\n\nErrors:\n${errorFiles}`);
-        } else {
-          alert(`Successfully uploaded ${result.successCount} files for patient ${result.patientId}`);
+        // Update chunk progress for current file
+        if (progress.fileProgress) {
+          setChunkProgress({
+            filename: progress.currentFileName,
+            chunksCompleted: progress.fileProgress.completedChunks,
+            totalChunks: progress.fileProgress.totalChunks,
+            percentage: progress.fileProgress.percentage,
+            currentChunk: progress.fileProgress.currentChunk
+          });
         }
+      });
 
-        // Reset form
-        setPatientId('');
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+      // Final progress update
+      setUploadProgress({
+        current: result.successCount,
+        total: result.totalFiles,
+        success: result.successCount,
+        errors: result.errorCount,
+        completed: true
+      });
+      setChunkProgress(null);
 
-        // Notify parent component
-        if (onUploadComplete) {
-          onUploadComplete(result);
-        }
-
+      // Show detailed results
+      if (result.errorCount > 0) {
+        const errorFiles = result.results
+          .filter(r => r.status === 'error')
+          .map(r => `${r.filename}: ${r.error}`)
+          .join('\n');
+        alert(`Upload completed with errors:\n\nSuccessful: ${result.successCount}\nFailed: ${result.errorCount}\n\nErrors:\n${errorFiles}`);
       } else {
-        throw new Error(result.error || 'Upload failed');
+        alert(`Successfully uploaded ${result.successCount} files for patient ${patientId.trim()}`);
+      }
+
+      // Reset form
+      setPatientId('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      // Notify parent component
+      if (onUploadComplete) {
+        onUploadComplete(result);
       }
 
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Chunked upload error:', error);
       alert(`Upload failed: ${error.message}`);
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(null), 3000);
+      setTimeout(() => {
+        setUploadProgress(null);
+        setChunkProgress(null);
+      }, 3000);
     }
   };
 
@@ -165,7 +181,35 @@ export default function FolderUpload({ onUploadComplete }) {
               <div className="spinner"></div>
               <p>Uploading files...</p>
               {uploadProgress && (
-                <p>{uploadProgress.current} of {uploadProgress.total} files processed</p>
+                <div className="progress-details">
+                  <p>File {uploadProgress.currentFile || uploadProgress.current} of {uploadProgress.total}</p>
+                  {uploadProgress.currentFileName && (
+                    <p className="current-file">📄 {uploadProgress.currentFileName}</p>
+                  )}
+                  {uploadProgress.overallPercentage && (
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${uploadProgress.overallPercentage}%` }}
+                      ></div>
+                      <span className="progress-text">{uploadProgress.overallPercentage}%</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {chunkProgress && (
+                <div className="chunk-progress">
+                  <p className="chunk-info">
+                    Chunk {chunkProgress.currentChunk || chunkProgress.chunksCompleted} of {chunkProgress.totalChunks}
+                  </p>
+                  <div className="chunk-progress-bar">
+                    <div
+                      className="chunk-progress-fill"
+                      style={{ width: `${chunkProgress.percentage}%` }}
+                    ></div>
+                    <span className="chunk-progress-text">{chunkProgress.percentage}%</span>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
