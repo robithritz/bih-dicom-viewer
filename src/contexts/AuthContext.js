@@ -28,9 +28,9 @@ export const AuthProvider = ({ children }) => {
       const patientToken = localStorage.getItem('auth-token');
 
       console.log("masuk checkauth ", { adminToken: !!adminToken, patientToken: !!patientToken });
-
+      console.log("PATHNAME", router.pathname);
       const pathname = router.pathname;
-      if (adminToken && pathname.includes('/portal')) {
+      if (adminToken && (pathname.includes('/portal') || pathname.includes('/admin/viewer'))) {
         // Check admin authentication
         const response = await fetch('/api/admin/auth/me', {
           headers: {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import DicomThumbnail from './DicomThumbnail';
 
-export default function FileBrowser({ currentFile, onFileSelect, onClose }) {
+export default function FileBrowser({ currentFile, onFileSelect, onClose, patientId, isAdmin }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,7 +13,20 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose }) {
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/files');
+      const apiPath = isAdmin
+        ? `/api/admin/files?patient=${patientId}`
+        : '/api/files';
+
+      const token = isAdmin
+        ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+        : `Bearer ${localStorage.getItem('auth-token')}`;
+      const response = await fetch(apiPath,
+        {
+          headers: {
+            'Authorization': token
+          }
+        }
+      );
       if (!response.ok) {
         throw new Error('Failed to fetch files');
       }

@@ -1,6 +1,6 @@
-import { getDicomFiles, DICOM_DIR } from '../../lib/dicom';
-import { requireAuth } from '../../lib/auth-middleware';
+import { getDicomFiles, DICOM_DIR } from '../../../lib/dicom';
 import path from 'path';
+import { requireAdminAuth } from '../../../lib/admin-auth-middleware';
 
 async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -9,12 +9,12 @@ async function handler(req, res) {
 
   try {
     // Use patient ID from authenticated session
-    const patientId = req.patient.patientId;
-    const urn = req.patient.urn;
+    const patientId = req.query.patient;
+    console.log(patientId)
 
     console.log('Loading files for authenticated patient:', patientId);
 
-    const files = getDicomFiles(urn).map(file => ({
+    const files = getDicomFiles(patientId).map(file => ({
       name: file,
       path: path.join(DICOM_DIR, file),
       patientId: patientId
@@ -28,4 +28,4 @@ async function handler(req, res) {
   }
 }
 
-export default requireAuth(handler);
+export default requireAdminAuth(handler);

@@ -35,10 +35,15 @@ export default async function handler(req, res) {
     res.status(200).json({
       success: true,
       patient: {
+        id: patient.idPatients.toString(),
+        urn: patient.urn,
         email: patient.email,
         patientId: patient.psid,
         firstName: patient.firstName,
         lastName: patient.lastName,
+        sex: patient.sex,
+        age: patient.age,
+        dob: patient.dob,
         updatedAt: patient.updatedAt
       }
     });

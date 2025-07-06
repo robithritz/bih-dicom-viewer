@@ -45,6 +45,7 @@ export const sendOTPEmail = async (email, otp, patientId) => {
         </head>
         <body>
           <div class="container">
+          <img src="/images/bih-logo.png" alt="Logo" width="200" height="80">
             <div class="header">
               <h1>${process.env.APP_NAME}</h1>
               <p>Medical Records Access</p>

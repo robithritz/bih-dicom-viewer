@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
+import Image from 'next/image';
 
 export default function PatientPortal() {
   const router = useRouter();
@@ -29,7 +30,13 @@ export default function PatientPortal() {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/studies?patient=${user.patientId}`);
+      const response = await fetch(`/api/studies?patient=${user.patientId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+          }
+        }
+      );
       if (!response.ok) {
         throw new Error('Failed to fetch studies');
       }
@@ -61,7 +68,9 @@ export default function PatientPortal() {
       <Layout>
         <div className="container">
           <div className="header">
-            <h1>🏥 Patient Portal</h1>
+            <h1 className="flex justify-center">
+              <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+              DICOM Viewer</h1>
             <p>Loading your medical imaging studies...</p>
           </div>
         </div>
@@ -74,7 +83,10 @@ export default function PatientPortal() {
       <Layout>
         <div className="container">
           <div className="header">
-            <h1>🏥 Patient Portal</h1>
+            <h1 className="flex justify-center">
+              <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+              DICOM Viewer
+            </h1>
             <p style={{ color: 'red' }}>Error: {error}</p>
             <button onClick={fetchStudies}>Retry</button>
           </div>
@@ -87,12 +99,15 @@ export default function PatientPortal() {
     <Layout>
       <div className="container">
         <div className="header">
-          <h1>🏥 Patient Portal</h1>
-          <p>Welcome, {user?.patientId} - View your medical imaging results</p>
+          <h1 className="flex justify-center">
+            <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+            DICOM Viewer
+          </h1>
+          <p>Welcome, {user?.firstName} - View your medical imaging results</p>
           <div className="header-actions">
             <div className="auth-actions">
               <div className="user-info">
-                <span className="welcome-text">Patient ID: {user?.patientId}</span>
+                <span className="welcome-text">Patient ID: {user?.patientId} | URN : {user?.urn}</span>
                 <button onClick={logout} className="logout-button">
                   Logout
                 </button>

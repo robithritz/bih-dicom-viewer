@@ -93,6 +93,16 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         decodeConfig: {
           convertFloatPixelDataToInt: false,
         },
+        beforeSend: function (xhr) {
+          // Add authorization header for DICOM file requests
+          const token = isAdmin
+            ? localStorage.getItem('admin-auth-token')
+            : localStorage.getItem('auth-token');
+
+          if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          }
+        }
       });
 
       // Initialize cornerstone tools
@@ -306,6 +316,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       <div className="viewer-content">
         {showFileBrowser && (
           <FileBrowser
+            isAdmin={isAdmin}
+            patientId={filename.split('/')[0]}
             currentFile={filename}
             onFileSelect={(newFilename) => {
               const viewerPath = isAdmin

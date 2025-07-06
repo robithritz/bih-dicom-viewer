@@ -27,7 +27,14 @@ export default function DicomViewer({ filename, isAdmin = false }) {
         ? `/api/admin/dicom-info/${encodeURIComponent(filename)}`
         : `/api/dicom-info/${encodeURIComponent(filename)}`;
 
-      const response = await fetch(apiPath);
+      const token = isAdmin ? `Bearer ${localStorage.getItem('admin-auth-token')}` : `Bearer ${localStorage.getItem('auth-token')}`
+      console.log("token", apiPath, token);
+
+      const response = await fetch(apiPath, {
+        headers: {
+          'Authorization': token
+        }
+      });
       if (!response.ok) {
         if (response.status == 401) {
           router.replace(isAdmin ? '/portal' : '/login');

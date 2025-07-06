@@ -19,11 +19,11 @@ export const createOTPSession = async (email) => {
   const normalizedEmail = email.toLowerCase().trim();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + (OTP_EXPIRY_TIME * 1000));
-  
+
   try {
     // Clean up expired OTPs first
     await cleanupExpiredOTPs();
-    
+
     // Check for existing session
     const existingSession = await prisma.otp.findFirst({
       where: { email: normalizedEmail },
@@ -33,19 +33,19 @@ export const createOTPSession = async (email) => {
     // Check retry limits
     if (existingSession) {
       const timeSinceLastRequest = now - existingSession.lastRequestTime;
-      
-      if (existingSession.retryCount >= MAX_RETRY_COUNT && 
-          timeSinceLastRequest < (RETRY_COOLDOWN_TIME * 1000)) {
+
+      if (existingSession.retryCount >= MAX_RETRY_COUNT &&
+        timeSinceLastRequest < (RETRY_COOLDOWN_TIME * 1000)) {
         throw new Error(`Too many attempts. Please wait ${Math.ceil((RETRY_COOLDOWN_TIME * 1000 - timeSinceLastRequest) / 60000)} minutes before trying again.`);
       }
     }
 
     const otp = generateOTP();
     const sessionId = crypto.randomUUID();
-    const retryCount = existingSession && 
-                      (now - existingSession.lastRequestTime) < (RETRY_COOLDOWN_TIME * 1000) 
-                      ? existingSession.retryCount + 1 
-                      : 1;
+    const retryCount = existingSession &&
+      (now - existingSession.lastRequestTime) < (RETRY_COOLDOWN_TIME * 1000)
+      ? existingSession.retryCount + 1
+      : 1;
 
     // Delete existing sessions for this email
     await prisma.otp.deleteMany({
@@ -83,11 +83,11 @@ export const createOTPSession = async (email) => {
  */
 export const verifyOTP = async (email, otp, sessionId) => {
   const normalizedEmail = email.toLowerCase().trim();
-  
+
   try {
     // Clean up expired OTPs first
     await cleanupExpiredOTPs();
-    
+
     const otpSession = await prisma.otp.findFirst({
       where: {
         email: normalizedEmail,
@@ -132,7 +132,7 @@ export const verifyOTP = async (email, otp, sessionId) => {
         where: { id: otpSession.id },
         data: { attempts: otpSession.attempts + 1 }
       });
-      
+
       return {
         success: false,
         error: 'Invalid OTP code',
@@ -173,11 +173,11 @@ export const cleanupExpiredOTPs = async () => {
         }
       }
     });
-    
+
     if (result.count > 0) {
       console.log(`Cleaned up ${result.count} expired OTP sessions`);
     }
-    
+
     return result.count;
   } catch (error) {
     console.error('Error cleaning up expired OTPs:', error);
@@ -191,7 +191,7 @@ export const cleanupExpiredOTPs = async () => {
 export const getOTPSession = async (email, sessionId) => {
   try {
     const normalizedEmail = email.toLowerCase().trim();
-    
+
     const otpSession = await prisma.otp.findFirst({
       where: {
         email: normalizedEmail,

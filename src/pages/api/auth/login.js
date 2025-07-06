@@ -25,15 +25,13 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Patient not found. Please contact administrator to register your account.' });
     }
 
-    console.log('Patient found:', { email: patient.email, patientId: patient.patientId });
-
     // Create OTP session for existing patient
     const otpSession = await createOTPSession(normalizedEmail);
 
     console.log('OTP session created:', { success: !!otpSession.sessionId, sessionId: otpSession.sessionId });
 
     // Send OTP email
-    await sendOTPEmail(normalizedEmail, otpSession.otp, patient.patientId);
+    await sendOTPEmail(normalizedEmail, otpSession.otp, patient.psid);
 
     res.status(200).json({
       success: true,

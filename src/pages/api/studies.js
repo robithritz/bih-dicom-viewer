@@ -8,11 +8,12 @@ async function handler(req, res) {
 
   try {
     // Use patient ID from authenticated session instead of query parameter
-    const patientId = req.patient.patientId;
+    const patientId = req.patient.urn;
 
     console.log('Loading studies for authenticated patient:', patientId);
 
     const files = getDicomFiles(patientId);
+    console.log("FILES" + files);
     const studies = organizeDicomStudies(files);
 
     res.status(200).json({

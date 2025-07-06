@@ -191,6 +191,9 @@ export default function LoginPage() {
             <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
             Patient Login
           </h2>
+          <h1>
+            Dicom Viewer
+          </h1>
           <p>Access your medical imaging results</p>
         </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '../components/Layout';
+import Image from 'next/image';
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -188,7 +189,8 @@ export default function AdminPortal() {
         <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-md w-full space-y-8">
             <div>
-              <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+              <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 items-center flex flex-col">
+                <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
                 Admin Portal Login
               </h2>
               <p className="mt-2 text-center text-sm text-gray-600">
@@ -258,11 +260,14 @@ export default function AdminPortal() {
         <div className="header">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">🏥 DICOM Viewer - Admin Portal</h1>
-              <p className="text-gray-600">Medical Image Viewer and Management System</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+                DICOM Viewer - Admin Portal
+              </h1>
+              <p className="text-white">Medical Image Viewer and Management System</p>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-white">
                 Welcome, {user?.name} ({user?.role})
               </span>
               <button
@@ -280,7 +285,7 @@ export default function AdminPortal() {
             📁 Upload DICOM Files
           </Link>
 
-          {getPatientIds().length > 0 && (
+          {/* {getPatientIds().length > 0 && (
             <div className="patient-filter flex items-center space-x-2">
               <label className="text-sm font-medium text-gray-700">Filter by Patient:</label>
               <select
@@ -296,7 +301,7 @@ export default function AdminPortal() {
                 ))}
               </select>
             </div>
-          )}
+          )} */}
 
           {/* <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
             Patient Portal →

@@ -16,6 +16,7 @@ export default function AdminViewerPage() {
 
   // Check if user is admin
   useEffect(() => {
+    console.log("kesini", { authLoading, isAuthenticated, user });
     if (!authLoading && (!isAuthenticated || !user || user.role !== 'superadmin')) {
       router.replace('/portal');
       return;

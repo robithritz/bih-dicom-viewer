@@ -12,7 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 export const verifyPatientSession = async (req) => {
   try {
     // Get token from Authorization header or cookie (for backward compatibility)
-    let token = req.cookies['auth-token'];
+    let token;
 
     // Check Authorization header first
     const authHeader = req.headers.authorization;
@@ -35,10 +35,15 @@ export const verifyPatientSession = async (req) => {
     }
 
     return {
+      id: patient.idPatients.toString(),
+      urn: patient.urn,
       email: patient.email,
       patientId: patient.psid, // Use psid as patient ID
       firstName: patient.firstName,
       lastName: patient.lastName,
+      sex: patient.sex,
+      age: patient.age,
+      dob: patient.dob,
       updatedAt: patient.updatedAt
     };
 
@@ -128,7 +133,7 @@ export const validatePatientFileAccess = (req, filename) => {
     [patientIdFromPath, actualFilename] = filename.split('/');
 
     // Validate that the patient ID in path matches authenticated patient
-    if (patientIdFromPath !== patient.patientId) {
+    if (patientIdFromPath !== patient.urn) {
       return {
         isValid: false,
         error: 'Access denied: Patient ID mismatch'
@@ -137,7 +142,7 @@ export const validatePatientFileAccess = (req, filename) => {
   } else {
     // Format: just "filename" - use authenticated patient ID
     actualFilename = filename;
-    patientIdFromPath = patient.patientId;
+    patientIdFromPath = patient.urn;
   }
 
   // Get the correct file path for this patient
@@ -167,7 +172,8 @@ export const requireAdminAuth = (handler) => {
   return async (req, res) => {
     try {
       // Get admin token from Authorization header or cookie (for backward compatibility)
-      let token = req.cookies['admin-auth-token'];
+      // let token = req.cookies['admin-auth-token'];
+      let token;
 
       // Check Authorization header first
       const authHeader = req.headers.authorization;

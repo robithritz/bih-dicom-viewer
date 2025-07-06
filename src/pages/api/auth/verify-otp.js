@@ -34,28 +34,20 @@ export default async function handler(req, res) {
 
     // Get or create patient
     let patient = await getPatientByEmail(normalizedEmail);
-    if (!patient) {
-      // Create new patient with email as patient ID fallback
-      const patientId = normalizedEmail.split('@')[0];
-      patient = await createOrUpdatePatient({
-        email: normalizedEmail,
-        patientId: patientId,
-        name: null
-      });
-    } else {
-      // Update last login
-      await createOrUpdatePatient({
-        email: normalizedEmail,
-        patientId: patient.patientId,
-        name: patient.name
-      });
-    }
+
 
     // Generate JWT token
     const token = jwt.sign(
       {
+        id: patient.idPatients.toString(),
+        urn: patient.urn,
+        psid: patient.psid,
         email: patient.email,
-        patientId: patient.psid // Use psid as patient ID
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        sex: patient.sex,
+        age: patient.age,
+        dob: patient.dob
       },
       JWT_SECRET,
       { expiresIn: '7d' }
