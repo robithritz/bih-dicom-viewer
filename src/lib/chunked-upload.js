@@ -87,7 +87,7 @@ async function uploadChunk(chunkData, patientId, filename, fileHash, totalChunks
       formData.append('totalSize', totalSize.toString());
       formData.append('chunk', chunk);
 
-      const response = await fetch(process.env.APP_URL + '/api/upload-chunk', {
+      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/upload-chunk', {
         method: 'POST',
         body: formData,
       });

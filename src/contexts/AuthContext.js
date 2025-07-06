@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
       if (adminToken && (pathname.includes('/portal') || pathname.includes('/admin/') || pathname.includes('/upload'))) {
         // Check admin authentication
         try {
-          const response = await fetch(process.env.APP_URL + '/api/admin/auth/me', {
+          const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/auth/me', {
             headers: {
               'Authorization': `Bearer ${adminToken}`
             }
@@ -84,7 +84,7 @@ export const AuthProvider = ({ children }) => {
       } else if (patientToken) {
         // Check patient authentication
         try {
-          const response = await fetch(process.env.APP_URL + '/api/auth/me', {
+          const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/me', {
             headers: {
               'Authorization': `Bearer ${patientToken}`
             }
@@ -128,7 +128,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, patientId) => {
     try {
-      const response = await fetch(process.env.APP_URL + '/api/auth/register', {
+      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +156,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('auth-token');
 
       // Optional: Call logout API to invalidate server-side sessions
-      await fetch(process.env.APP_URL + '/api/auth/logout', {
+      await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/logout', {
         method: 'POST',
       });
 
