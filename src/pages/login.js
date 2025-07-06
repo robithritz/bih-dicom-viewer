@@ -188,7 +188,7 @@ export default function LoginPage() {
       <div className="auth-card">
         <div className="auth-header">
           <h2 className="flex justify-between items-center">
-            <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+            <Image src={`${router.basePath}/images/bih-logo.png`} alt="Logo" width={200} height={80} />
             Patient Login
           </h2>
           <h1>
