@@ -14,54 +14,107 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
 
-  // Check authentication status on mount
+  // Check authentication status on mount and when router is ready
   useEffect(() => {
-    checkAuth();
-  }, []);
+    // Only run checkAuth when router is ready and we haven't initialized yet
+    if (router.isReady && !isInitialized) {
+      checkAuth();
+    }
+  }, [router.isReady, isInitialized]);
 
-  const checkAuth = async () => {
+  const checkAuth = async (retryCount = 0) => {
     try {
+      setLoading(true);
+
+      // Ensure we're in the browser environment
+      if (typeof window === 'undefined') {
+        setLoading(false);
+        setIsInitialized(true);
+        return;
+      }
+
       // Check which type of auth token is present in localStorage
       const adminToken = localStorage.getItem('admin-auth-token');
       const patientToken = localStorage.getItem('auth-token');
 
-      console.log("masuk checkauth ", { adminToken: !!adminToken, patientToken: !!patientToken });
-      console.log("PATHNAME", router.pathname);
+      console.log("masuk checkauth ", {
+        adminToken: !!adminToken,
+        patientToken: !!patientToken,
+        pathname: router.pathname,
+        isReady: router.isReady,
+        retryCount
+      });
+
       const pathname = router.pathname;
-      if (adminToken && (pathname.includes('/portal') || pathname.includes('/admin/viewer'))) {
+
+      if (adminToken && (pathname.includes('/portal') || pathname.includes('/admin/') || pathname.includes('/upload'))) {
         // Check admin authentication
-        const response = await fetch('/api/admin/auth/me', {
-          headers: {
-            'Authorization': `Bearer ${adminToken}`
+        try {
+          const response = await fetch('/api/admin/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${adminToken}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setUser(data.user);
+            console.log("Admin auth successful:", data.user);
+          } else {
+            console.log("Admin auth failed, removing token");
+            // Invalid token, remove it
+            localStorage.removeItem('admin-auth-token');
+            setUser(null);
           }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setUser(data.user);
-        } else {
-          // Invalid token, remove it
+        } catch (fetchError) {
+          console.error('Admin auth API call failed:', fetchError);
+          // If it's a network error and we haven't retried too many times, retry
+          if (retryCount < 2) {
+            console.log(`Retrying admin auth check (attempt ${retryCount + 1})`);
+            setTimeout(() => checkAuth(retryCount + 1), 1000);
+            return;
+          }
+          // After max retries, assume token is invalid
           localStorage.removeItem('admin-auth-token');
           setUser(null);
         }
       } else if (patientToken) {
         // Check patient authentication
-        const response = await fetch('/api/auth/me', {
-          headers: {
-            'Authorization': `Bearer ${patientToken}`
+        try {
+          const response = await fetch('/api/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${patientToken}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setUser(data.patient);
+            console.log("Patient auth successful:", data.patient);
+          } else {
+            console.log("Patient auth failed, removing token");
+            // Invalid token, remove it
+            localStorage.removeItem('auth-token');
+            setUser(null);
           }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setUser(data.patient);
-        } else {
-          // Invalid token, remove it
+        } catch (fetchError) {
+          console.error('Patient auth API call failed:', fetchError);
+          // If it's a network error and we haven't retried too many times, retry
+          if (retryCount < 2) {
+            console.log(`Retrying patient auth check (attempt ${retryCount + 1})`);
+            setTimeout(() => checkAuth(retryCount + 1), 1000);
+            return;
+          }
+          // After max retries, assume token is invalid
           localStorage.removeItem('auth-token');
           setUser(null);
         }
       } else {
         // No auth tokens present
+        console.log("No auth tokens found");
         setUser(null);
       }
     } catch (error) {
@@ -69,6 +122,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
     } finally {
       setLoading(false);
+      setIsInitialized(true);
     }
   };
 
@@ -121,6 +175,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
+    isInitialized,
     register,
     logout,
     checkAuth,

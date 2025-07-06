@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import FolderUpload from '../components/FolderUpload';
-// import '../styles/folder-upload.css';
+import ZipUpload from '../../components/ZipUpload';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function UploadPage() {
   const router = useRouter();
   const [recentUploads, setRecentUploads] = useState([]);
+  const { user, isAuthenticated, loading: authLoading, isInitialized } = useAuth();
 
   const handleUploadComplete = (result) => {
     // Add to recent uploads
@@ -21,15 +22,57 @@ export default function UploadPage() {
     ]);
   };
 
+  useEffect(() => {
+    console.log("Auth state check:", {
+      authLoading,
+      isAuthenticated,
+      isInitialized,
+      user: user ? { role: user.role, email: user.email } : null
+    });
+
+    // Only redirect if auth is fully initialized and user is not properly authenticated
+    if (isInitialized && !authLoading) {
+      if (!isAuthenticated || !user || user.role !== 'superadmin') {
+        console.log("Redirecting to portal - auth failed");
+        router.replace('/portal');
+        return;
+      }
+    }
+  }, [user, isAuthenticated, authLoading, isInitialized, router]);
+
   const handleViewPatient = (patientId) => {
     router.push(`/portal?patient=${patientId}`);
   };
 
+  // Show loading while auth is initializing
+  if (!isInitialized || authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Initializing authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if user is not authenticated (will redirect)
+  if (!isAuthenticated || !user || user.role !== 'superadmin') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="upload-page">
       <div className="upload-header">
-        <h1>Upload DICOM Files</h1>
-        <p>Upload DICOM files organized by patient ID</p>
+        <h1>Upload DICOM ZIP Files</h1>
+        <p>Upload ZIP files containing DICOM files organized by patient ID</p>
         <button
           className="back-button"
           onClick={() => router.push('/portal')}
@@ -38,7 +81,7 @@ export default function UploadPage() {
         </button>
       </div>
 
-      <FolderUpload onUploadComplete={handleUploadComplete} />
+      <ZipUpload onUploadComplete={handleUploadComplete} />
 
       {recentUploads.length > 0 && (
         <div className="recent-uploads">
@@ -71,11 +114,13 @@ export default function UploadPage() {
       <div className="upload-instructions">
         <h2>Instructions</h2>
         <ol>
-          <li>Enter a unique Patient ID (letters, numbers, hyphens, and underscores only)</li>
-          <li>Drag and drop DICOM files (.dcm or .dicom) or click to select files</li>
-          <li>Files will be organized in DICOM/[patient_id]/ folder</li>
+          <li>Name your ZIP file using format: <code>{'{patient_id}_{episode_id}.zip'}</code></li>
+          <li>ZIP file should contain DICOM files (.dcm or .dicom)</li>
+          <li>Drag and drop the ZIP file or click to select</li>
+          <li>Patient ID will be automatically parsed from filename</li>
+          <li>DICOM files will be extracted to DICOM/[patient_id]/ folder</li>
+          <li>Non-DICOM files in the ZIP will be ignored</li>
           <li>Duplicate filenames will be automatically renamed</li>
-          <li>Only valid DICOM files will be accepted</li>
         </ol>
       </div>
 
@@ -216,6 +261,15 @@ export default function UploadPage() {
 
         .upload-instructions li {
           margin-bottom: 8px;
+        }
+
+        .upload-instructions code {
+          background-color: #f8f9fa;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-family: 'Courier New', monospace;
+          font-size: 13px;
+          color: #e83e8c;
         }
 
         @media (max-width: 768px) {

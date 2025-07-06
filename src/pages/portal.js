@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '../components/Layout';
 import Image from 'next/image';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -281,7 +282,7 @@ export default function AdminPortal() {
         </div>
 
         <div className="header-actions flex flex-wrap gap-4 items-center justify-between mb-6">
-          <Link href="/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+          <Link href="/admin/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
             📁 Upload DICOM Files
           </Link>
 
