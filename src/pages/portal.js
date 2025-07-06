@@ -43,7 +43,7 @@ export default function AdminPortal() {
         return;
       }
 
-      const response = await fetch('/api/admin/auth/me', {
+      const response = await fetch(process.env.APP_URL + '/api/admin/auth/me', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -72,7 +72,7 @@ export default function AdminPortal() {
     setError(null);
 
     try {
-      const response = await fetch('/api/admin/auth/login', {
+      const response = await fetch(process.env.APP_URL + '/api/admin/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,7 +108,7 @@ export default function AdminPortal() {
       localStorage.removeItem('admin-auth-token');
 
       // Optional: Call logout API
-      await fetch('/api/admin/auth/logout', { method: 'POST' });
+      await fetch(process.env.APP_URL + '/api/admin/auth/logout', { method: 'POST' });
 
       setUser(null);
       setIsAuthenticated(false);
@@ -127,7 +127,9 @@ export default function AdminPortal() {
     try {
       setLoading(true);
       const token = localStorage.getItem('admin-auth-token');
-      const url = selectedPatient ? `/api/admin/studies?patient=${selectedPatient}` : '/api/admin/studies';
+      const url = selectedPatient
+        ? `${process.env.APP_URL}/api/admin/studies?patient=${selectedPatient}`
+        : `${process.env.APP_URL}/api/admin/studies`;
 
       const response = await fetch(url, {
         headers: {

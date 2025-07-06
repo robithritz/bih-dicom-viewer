@@ -24,8 +24,8 @@ export default function DicomViewer({ filename, isAdmin = false }) {
     try {
       setLoading(true);
       const apiPath = isAdmin
-        ? `/api/admin/dicom-info/${encodeURIComponent(filename)}`
-        : `/api/dicom-info/${encodeURIComponent(filename)}`;
+        ? `${process.env.APP_URL}/api/admin/dicom-info/${encodeURIComponent(filename)}`
+        : `${process.env.APP_URL}/api/dicom-info/${encodeURIComponent(filename)}`;
 
       const token = isAdmin ? `Bearer ${localStorage.getItem('admin-auth-token')}` : `Bearer ${localStorage.getItem('auth-token')}`
       console.log("token", apiPath, token);

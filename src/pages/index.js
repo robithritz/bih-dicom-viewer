@@ -30,7 +30,7 @@ export default function PatientPortal() {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/studies?patient=${user.patientId}`,
+      const response = await fetch(`${process.env.APP_URL}/api/studies?patient=${user.patientId}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth-token')}`

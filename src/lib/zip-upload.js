@@ -45,7 +45,7 @@ export function createFileChunks(file, chunkSize = ZIP_CHUNK_CONFIG.CHUNK_SIZE) 
     const start = i * chunkSize;
     const end = Math.min(start + chunkSize, file.size);
     const chunk = file.slice(start, end);
-    
+
     chunks.push({
       index: i,
       chunk: chunk,
@@ -89,7 +89,7 @@ async function uploadChunk(chunkData, sessionId, patientId, filename, fileHash, 
   let lastError;
   for (let attempt = 0; attempt < ZIP_CHUNK_CONFIG.MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch('/api/admin/upload-zip-chunk', {
+      const response = await fetch(process.env.APP_URL + '/api/admin/upload-zip-chunk', {
         method: 'POST',
         headers,
         body: formData
@@ -106,7 +106,7 @@ async function uploadChunk(chunkData, sessionId, patientId, filename, fileHash, 
     } catch (error) {
       lastError = error;
       console.warn(`Chunk ${chunkData.index} upload attempt ${attempt + 1} failed:`, error.message);
-      
+
       if (attempt < ZIP_CHUNK_CONFIG.MAX_RETRIES - 1) {
         // Wait before retry
         await new Promise(resolve => setTimeout(resolve, ZIP_CHUNK_CONFIG.RETRY_DELAY * (attempt + 1)));
@@ -128,22 +128,22 @@ export async function uploadZipFileChunked(zipFile, patientId, progressCallback)
   try {
     // Generate session ID
     const sessionId = `zip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     // Calculate file hash
     progressCallback({ type: 'chunk', stage: 'Calculating file hash...', percentage: 0 });
     const fileHash = await calculateFileHash(zipFile);
-    
+
     // Create chunks
     progressCallback({ type: 'chunk', stage: 'Preparing upload...', percentage: 5 });
     const chunks = createFileChunks(zipFile);
     const totalChunks = chunks.length;
-    
+
     console.log(`Uploading ZIP file in ${totalChunks} chunks of ${ZIP_CHUNK_CONFIG.CHUNK_SIZE / 1024 / 1024}MB each`);
 
     // Upload chunks sequentially
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      
+
       progressCallback({
         type: 'chunk',
         currentChunk: i + 1,
@@ -168,7 +168,7 @@ export async function uploadZipFileChunked(zipFile, patientId, progressCallback)
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const finalizeResponse = await fetch('/api/admin/finalize-zip-upload', {
+    const finalizeResponse = await fetch(process.env.APP_URL + '/api/admin/finalize-zip-upload', {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -193,7 +193,7 @@ export async function uploadZipFileChunked(zipFile, patientId, progressCallback)
     }
 
     // Get final result
-    const statusResponse = await fetch(`/api/admin/zip-upload-status?sessionId=${sessionId}`, {
+    const statusResponse = await fetch(`${process.env.APP_URL}/api/admin/zip-upload-status?sessionId=${sessionId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
@@ -221,7 +221,7 @@ async function pollExtractionProgress(sessionId, progressCallback) {
 
   while (true) {
     try {
-      const response = await fetch(`/api/admin/zip-upload-status?sessionId=${sessionId}`, {
+      const response = await fetch(`${process.env.APP_URL}/api/admin/zip-upload-status?sessionId=${sessionId}`, {
         headers
       });
 

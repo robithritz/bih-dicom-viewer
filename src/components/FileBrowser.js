@@ -14,8 +14,8 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
     try {
       setLoading(true);
       const apiPath = isAdmin
-        ? `/api/admin/files?patient=${patientId}`
-        : '/api/files';
+        ? `${process.env.APP_URL}/api/admin/files?patient=${patientId}`
+        : `${process.env.APP_URL}/api/files`;
 
       const token = isAdmin
         ? `Bearer ${localStorage.getItem('admin-auth-token')}`

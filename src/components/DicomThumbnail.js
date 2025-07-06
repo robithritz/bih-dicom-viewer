@@ -17,7 +17,7 @@ const DicomThumbnail = ({ filename, size = 150, className = '' }) => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/dicom-thumbnail/${filename}`);
+      const response = await fetch(`${process.env.APP_URL}/api/dicom-thumbnail/${filename}`);
       if (!response.ok) {
         throw new Error('Failed to load thumbnail');
       }
