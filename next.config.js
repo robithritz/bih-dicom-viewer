@@ -28,7 +28,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' blob:",
               "worker-src 'self' blob:",
-              "connect-src 'self'",
+              "connect-src 'self' blob:",
               "img-src 'self' data:",
               "style-src 'self' 'unsafe-inline'",
             ].join('; ')
