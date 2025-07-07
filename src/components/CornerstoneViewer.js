@@ -228,7 +228,32 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
           if (canvas) {
             canvas.style.pointerEvents = 'auto';
             canvas.style.touchAction = 'none';
-            console.log('Canvas event handlers configured');
+            canvas.style.userSelect = 'none';
+            canvas.style.cursor = 'crosshair';
+
+            // Force canvas to be focusable and interactive
+            canvas.setAttribute('tabindex', '0');
+            canvas.setAttribute('role', 'img');
+
+            // Add comprehensive event listeners for debugging
+            const eventTypes = ['mousedown', 'mousemove', 'mouseup', 'wheel', 'touchstart', 'touchmove', 'touchend'];
+            eventTypes.forEach(eventType => {
+              if (!canvas[`_${eventType}Listener`]) {
+                const listener = (e) => {
+                  console.log(`Canvas ${eventType} event:`, {
+                    type: e.type,
+                    button: e.button,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                    currentTool: currentTool
+                  });
+                };
+                canvas.addEventListener(eventType, listener);
+                canvas[`_${eventType}Listener`] = listener;
+              }
+            });
+
+            console.log('Canvas event handlers configured with comprehensive debugging');
           }
 
           // Activate the current tool (or default to wwwc)
@@ -304,7 +329,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
 
     try {
-      console.log(`Activating tool: ${toolName}`);
+      console.log(`🔧 Activating tool: ${toolName}`);
 
       // Ensure the element is still enabled
       const enabledElement = cornerstone.getEnabledElement(elementRef.current);
@@ -312,6 +337,14 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         console.error('Element is not enabled, cannot activate tools');
         return;
       }
+
+      // Log current tool state before activation
+      const toolState = cornerstoneTools.store.state;
+      console.log('Current tool state before activation:', {
+        tools: Object.keys(toolState.tools || {}),
+        enabledElements: Object.keys(toolState.enabledElements || {}),
+        currentTool: toolName
+      });
 
       // Deactivate all tools
       cornerstoneTools.setToolPassive('Wwwc');
@@ -351,22 +384,28 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         canvas.style.pointerEvents = 'auto';
         canvas.style.touchAction = 'none';
         canvas.style.userSelect = 'none';
+        canvas.style.cursor = 'crosshair';
         // Force focus to ensure events are captured
         canvas.setAttribute('tabindex', '0');
+
+        // Force canvas to receive focus
+        canvas.focus();
       }
 
       // Force a redraw to ensure tools are properly attached
       cornerstone.updateImage(elementRef.current);
 
-      // Add a simple test to verify mouse events are working
-      if (canvas && !canvas._testListenerAdded) {
-        canvas.addEventListener('mousedown', (e) => {
-          console.log(`Mouse event captured on canvas for tool: ${toolName}`, e.button);
-        });
-        canvas._testListenerAdded = true;
-      }
+      // Verify tool activation by checking the tool state
+      const toolStateAfter = cornerstoneTools.store.state;
+      const elementToolState = toolStateAfter.enabledElements?.[enabledElement.uuid];
 
-      console.log(`Tool ${toolName} activated successfully`);
+      console.log(`✅ Tool ${toolName} activation complete:`, {
+        toolSet: !!elementToolState,
+        availableTools: Object.keys(toolStateAfter.tools || {}),
+        elementUuid: enabledElement.uuid,
+        canvasConfigured: !!canvas,
+        canvasInteractive: canvas?.style.pointerEvents === 'auto'
+      });
     } catch (error) {
       console.error(`Error activating tool ${toolName}:`, error);
 
@@ -431,16 +470,74 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
   }, [loadFrameImage]); // Add loadFrameImage as dependency
 
-  // Add scroll event listener when handleScroll is ready
+  // Add scroll and touch event listeners for frame navigation
   useEffect(() => {
     const element = elementRef.current;
-    if (element && handleScroll) {
-      element.addEventListener('wheel', handleScroll);
-      return () => {
-        element.removeEventListener('wheel', handleScroll);
-      };
-    }
-  }, [handleScroll]);
+    if (!element || !handleScroll || totalFramesRef.current <= 1) return;
+
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let lastTouchTime = 0;
+
+    // Touch start handler for mobile
+    const handleTouchStart = (e) => {
+      const touch = e.touches[0];
+      touchStartY = touch.clientY;
+      touchStartX = touch.clientX;
+      lastTouchTime = Date.now();
+      console.log('📱 Touch start for frame navigation:', { y: touchStartY, frames: totalFramesRef.current });
+    };
+
+    // Touch move handler for mobile swipe
+    const handleTouchMove = (e) => {
+      if (!touchStartY || totalFramesRef.current <= 1) return;
+
+      const touch = e.touches[0];
+      const deltaY = touchStartY - touch.clientY;
+      const deltaX = touchStartX - touch.clientX;
+      const timeDelta = Date.now() - lastTouchTime;
+
+      // Only process vertical swipes that are significant and not too slow
+      if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 50 && timeDelta < 1000) {
+        e.preventDefault();
+
+        const direction = deltaY > 0 ? 1 : -1; // Swipe up = next frame, swipe down = previous frame
+        const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + direction));
+
+        if (newFrame !== currentFramesRef.current) {
+          console.log(`📱 Touch swipe: Frame ${currentFramesRef.current} → ${newFrame}`);
+          setCurrentFrame(newFrame);
+          loadFrameImage(newFrame);
+        }
+
+        // Reset touch to prevent multiple triggers
+        touchStartY = 0;
+        touchStartX = 0;
+      }
+    };
+
+    // Touch end handler
+    const handleTouchEnd = (e) => {
+      touchStartY = 0;
+      touchStartX = 0;
+      lastTouchTime = 0;
+    };
+
+    // Add all event listeners
+    element.addEventListener('wheel', handleScroll, { passive: false });
+    element.addEventListener('touchstart', handleTouchStart, { passive: false });
+    element.addEventListener('touchmove', handleTouchMove, { passive: false });
+    element.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+    console.log(`📱 Frame navigation events added for ${totalFramesRef.current} frames`);
+
+    return () => {
+      element.removeEventListener('wheel', handleScroll);
+      element.removeEventListener('touchstart', handleTouchStart);
+      element.removeEventListener('touchmove', handleTouchMove);
+      element.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [handleScroll, loadFrameImage]);
 
 
 
@@ -504,6 +601,15 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             ref={elementRef}
             className="cornerstone-element"
             onContextMenu={(e) => e.preventDefault()}
+            style={{
+              touchAction: 'none', // Prevent default touch behaviors
+              userSelect: 'none',  // Prevent text selection
+              WebkitUserSelect: 'none', // Safari
+              MozUserSelect: 'none',    // Firefox
+              msUserSelect: 'none',     // IE/Edge
+              WebkitTouchCallout: 'none', // Prevent iOS callout
+              WebkitTapHighlightColor: 'transparent' // Remove tap highlight
+            }}
           />
 
           {/* Loading indicator */}
@@ -521,6 +627,49 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
               Frame {currentFrame + 1} of {totalFrames}
             </div>
           )}
+
+          {/* Debug info for production tool debugging */}
+          <div style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: 'rgba(0,0,0,0.9)',
+            color: 'white',
+            padding: '8px',
+            fontSize: '12px',
+            borderRadius: '4px',
+            zIndex: 1000,
+            fontFamily: 'monospace'
+          }}>
+            Tools Ready: {toolsReady ? '✅' : '❌'}<br />
+            Current Tool: {currentTool || 'None'}<br />
+            Frames: {currentFrame + 1}/{totalFrames}<br />
+            Mobile: {/Mobi|Android/i.test(navigator.userAgent) ? '📱' : '🖥️'}<br />
+            Touch Events: Check console<br />
+            <button
+              onClick={() => {
+                console.log('🧪 Manual tool test - activating pan');
+                activateTool('pan');
+              }}
+              style={{
+                fontSize: '10px',
+                marginTop: '5px',
+                padding: '2px 4px',
+                background: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '2px',
+                cursor: 'pointer'
+              }}
+            >
+              Test Pan Tool
+            </button>
+            {totalFrames > 1 && (
+              <div style={{ marginTop: '5px', fontSize: '10px', color: '#ccc' }}>
+                📱 Swipe up/down to change frames
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
