@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  basePath: '/dicom-viewer',
+  assetPrefix: '/dicom-viewer',
   reactStrictMode: true,
   webpack: (config, { isServer }) => {
     // Handle cornerstone.js and DICOM libraries
@@ -17,6 +19,22 @@ const nextConfig = {
   transpilePackages: ['cornerstonejs/core', 'cornerstonejs/tools'],
   async headers() {
     return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' blob:",
+              "worker-src 'self' blob:",
+              "connect-src 'self'",
+              "img-src 'self' data:",
+              "style-src 'self' 'unsafe-inline'",
+            ].join('; ')
+          }
+        ]
+      },
       {
         source: '/api/dicom-file/:path*',
         headers: [
