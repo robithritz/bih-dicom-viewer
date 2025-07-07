@@ -264,7 +264,7 @@ export default function AdminPortal() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+                <Image src={`${router.basePath}/images/ihc-white.png`} alt="Logo" width={200} height={80} />
                 DICOM Viewer - Admin Portal
               </h1>
               <p className="text-white">Medical Image Viewer and Management System</p>

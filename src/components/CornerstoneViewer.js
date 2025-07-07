@@ -34,6 +34,23 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
   }, [cornerstone, filename]);
 
+  // Handle window resize to ensure canvas is properly sized
+  useEffect(() => {
+    const handleResize = () => {
+      if (cornerstone && elementRef.current) {
+        try {
+          cornerstone.resize(elementRef.current);
+          console.log('Canvas resized for window resize');
+        } catch (error) {
+          console.error('Error resizing canvas:', error);
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [cornerstone]);
+
   useEffect(() => {
     totalFramesRef.current = totalFrames;
   }, [totalFrames]);
@@ -134,10 +151,45 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
 
       // Enable the element
       if (elementRef.current) {
-        cornerstone.enable(elementRef.current);
+        // Ensure the element has proper dimensions before enabling
+        const element = elementRef.current;
 
-        // Set initial tool
-        cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
+        // Force a reflow to ensure dimensions are calculated
+        element.offsetHeight;
+
+        cornerstone.enable(element);
+
+        // Verify the element is properly enabled
+        const enabledElement = cornerstone.getEnabledElement(element);
+        console.log('Enabled element:', enabledElement);
+
+        // Add a small delay to ensure element is fully enabled and rendered
+        setTimeout(() => {
+          try {
+            // Ensure the canvas is properly sized
+            cornerstone.resize(element);
+
+            // Set initial tool
+            cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
+            console.log('Cornerstone tools initialized successfully');
+
+            // Force a redraw to ensure everything is properly rendered
+            if (cornerstone.getImage && cornerstone.getImage(element)) {
+              cornerstone.updateImage(element);
+            }
+
+            // Ensure canvas has proper event handlers (critical for production)
+            const canvas = element.querySelector('canvas');
+            if (canvas) {
+              // Force canvas to be interactive
+              canvas.style.pointerEvents = 'auto';
+              canvas.style.touchAction = 'none';
+              console.log('Canvas event handlers configured');
+            }
+          } catch (toolError) {
+            console.error('Error setting initial tool:', toolError);
+          }
+        }, 200);
 
         // Scroll event will be added in separate useEffect
       }
@@ -147,13 +199,18 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   };
 
   const loadDicomImage = async () => {
-    if (!cornerstone || !elementRef.current) return;
+    if (!cornerstone || !elementRef.current) {
+      console.error('Cannot load DICOM image: cornerstone or element not available');
+      return;
+    }
 
     try {
       const apiPath = isAdmin
         ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}`;
+
+      console.log('Loading DICOM image from:', apiPath);
 
       // Check for multi-frame
       const frames = parseInt(metadata?.numberOfFrames || '1');
@@ -167,6 +224,25 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       // Store viewport for frame changes
       const currentViewport = cornerstone.getViewport(elementRef.current);
       setViewport(currentViewport);
+
+      // Ensure tools are properly enabled after image load
+      if (cornerstoneTools && currentTool) {
+        setTimeout(() => {
+          // Re-enable the element to ensure tools work properly
+          try {
+            cornerstone.resize(elementRef.current);
+            activateTool(currentTool);
+
+            // Force a viewport update to ensure tools are properly attached
+            const viewport = cornerstone.getViewport(elementRef.current);
+            cornerstone.setViewport(elementRef.current, viewport);
+          } catch (error) {
+            console.error('Error re-enabling tools after image load:', error);
+          }
+        }, 200);
+      }
+
+      console.log('DICOM image loaded successfully');
 
     } catch (error) {
       console.error('Error loading DICOM image:', error);
@@ -239,39 +315,49 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   }, [handleScroll]);
 
   const activateTool = (toolName) => {
-    if (!cornerstoneTools) return;
-
-    // Deactivate all tools
-    cornerstoneTools.setToolPassive('Wwwc');
-    cornerstoneTools.setToolPassive('Zoom');
-    cornerstoneTools.setToolPassive('Pan');
-    cornerstoneTools.setToolPassive('Length');
-    cornerstoneTools.setToolPassive('Angle');
-    cornerstoneTools.setToolPassive('RectangleRoi');
-
-    // Activate selected tool
-    switch (toolName) {
-      case 'wwwc':
-        cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
-        break;
-      case 'zoom':
-        cornerstoneTools.setToolActive('Zoom', { mouseButtonMask: 1 });
-        break;
-      case 'pan':
-        cornerstoneTools.setToolActive('Pan', { mouseButtonMask: 1 });
-        break;
-      case 'length':
-        cornerstoneTools.setToolActive('Length', { mouseButtonMask: 1 });
-        break;
-      case 'angle':
-        cornerstoneTools.setToolActive('Angle', { mouseButtonMask: 1 });
-        break;
-      case 'roi':
-        cornerstoneTools.setToolActive('RectangleRoi', { mouseButtonMask: 1 });
-        break;
+    if (!cornerstoneTools || !elementRef.current) {
+      console.error('Cannot activate tool: cornerstoneTools or element not available');
+      return;
     }
 
-    setCurrentTool(toolName);
+    try {
+      console.log(`Activating tool: ${toolName}`);
+
+      // Deactivate all tools
+      cornerstoneTools.setToolPassive('Wwwc');
+      cornerstoneTools.setToolPassive('Zoom');
+      cornerstoneTools.setToolPassive('Pan');
+      cornerstoneTools.setToolPassive('Length');
+      cornerstoneTools.setToolPassive('Angle');
+      cornerstoneTools.setToolPassive('RectangleRoi');
+
+      // Activate selected tool
+      switch (toolName) {
+        case 'wwwc':
+          cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
+          break;
+        case 'zoom':
+          cornerstoneTools.setToolActive('Zoom', { mouseButtonMask: 1 });
+          break;
+        case 'pan':
+          cornerstoneTools.setToolActive('Pan', { mouseButtonMask: 1 });
+          break;
+        case 'length':
+          cornerstoneTools.setToolActive('Length', { mouseButtonMask: 1 });
+          break;
+        case 'angle':
+          cornerstoneTools.setToolActive('Angle', { mouseButtonMask: 1 });
+          break;
+        case 'roi':
+          cornerstoneTools.setToolActive('RectangleRoi', { mouseButtonMask: 1 });
+          break;
+      }
+
+      setCurrentTool(toolName);
+      console.log(`Tool ${toolName} activated successfully`);
+    } catch (error) {
+      console.error(`Error activating tool ${toolName}:`, error);
+    }
   };
 
   const clearMeasurements = () => {
