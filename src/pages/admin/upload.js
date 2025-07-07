@@ -23,19 +23,26 @@ export default function UploadPage() {
   };
 
   useEffect(() => {
-    console.log("Auth state check:", {
+    console.log("Admin Upload - Auth state check:", {
       authLoading,
       isAuthenticated,
       isInitialized,
-      user: user ? { role: user.role, email: user.email } : null
+      user: user ? { role: user.role, email: user.email, id: user.id } : null,
+      hasAdminToken: !!localStorage.getItem('admin-auth-token')
     });
 
     // Only redirect if auth is fully initialized and user is not properly authenticated
     if (isInitialized && !authLoading) {
       if (!isAuthenticated || !user || user.role !== 'superadmin') {
-        console.log("Redirecting to portal - auth failed");
+        console.log("Admin Upload - Redirecting to portal - auth failed:", {
+          isAuthenticated,
+          hasUser: !!user,
+          userRole: user?.role
+        });
         router.replace('/portal');
         return;
+      } else {
+        console.log("Admin Upload - Authentication successful, user can access upload page");
       }
     }
   }, [user, isAuthenticated, authLoading, isInitialized, router]);

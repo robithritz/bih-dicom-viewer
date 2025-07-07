@@ -179,6 +179,13 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     setLoading(false);
     setIsInitialized(true);
+    console.log('User data set directly:', userData);
+  };
+
+  // Function to force re-check authentication (useful after login)
+  const refreshAuth = async () => {
+    console.log('Refreshing authentication state...');
+    await checkAuth(0); // Reset retry count
   };
 
   const value = {
@@ -189,6 +196,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     checkAuth,
     setUserData,
+    refreshAuth,
     isAuthenticated: !!user,
   };
 

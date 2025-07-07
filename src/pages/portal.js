@@ -7,8 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export default function AdminPortal() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, isAuthenticated, loading: authContextLoading, setUserData, logout: authLogout, refreshAuth } = useAuth();
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [studies, setStudies] = useState({});
@@ -16,55 +15,24 @@ export default function AdminPortal() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
 
-  // Check authentication status
+  // Check for patient parameter in URL
   useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  useEffect(() => {
-    // Check for patient parameter in URL
     if (router.query.patient) {
       setSelectedPatient(router.query.patient);
     }
   }, [router.query.patient]);
 
+  // Fetch studies when authenticated or patient selection changes
   useEffect(() => {
     if (isAuthenticated) {
       fetchStudies();
     }
   }, [selectedPatient, isAuthenticated]);
 
-  const checkAuthStatus = async () => {
-    try {
-      const token = localStorage.getItem('admin-auth-token');
-      if (!token) {
-        setIsAuthenticated(false);
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        setIsAuthenticated(true);
-      } else {
-        // Invalid token, remove it
-        localStorage.removeItem('admin-auth-token');
-        setIsAuthenticated(false);
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      setIsAuthenticated(false);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Set loading state based on AuthContext
+  useEffect(() => {
+    setLoading(authContextLoading);
+  }, [authContextLoading]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -88,9 +56,19 @@ export default function AdminPortal() {
           localStorage.setItem('admin-auth-token', data.token);
         }
 
-        setUser(data.user);
-        setIsAuthenticated(true);
+        // Use AuthContext to set user data instead of local state
+        if (data.user) {
+          setUserData(data.user);
+
+          // Small delay to ensure state is updated before any navigation
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Force a refresh of authentication state to ensure consistency
+          await refreshAuth();
+        }
+
         setLoginForm({ email: '', password: '' });
+        console.log('Admin login successful, user data set in AuthContext');
       } else {
         setError(data.error || 'Login failed');
       }
@@ -104,21 +82,12 @@ export default function AdminPortal() {
 
   const handleLogout = async () => {
     try {
-      // Clear token from localStorage
-      localStorage.removeItem('admin-auth-token');
-
-      // Optional: Call logout API
-      await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/auth/logout', { method: 'POST' });
-
-      setUser(null);
-      setIsAuthenticated(false);
+      // Use AuthContext logout which handles everything
+      await authLogout();
       setStudies({});
     } catch (error) {
       console.error('Logout error:', error);
-      // Still clear state even if API call fails
-      localStorage.removeItem('admin-auth-token');
-      setUser(null);
-      setIsAuthenticated(false);
+      // Fallback: clear local state
       setStudies({});
     }
   };
