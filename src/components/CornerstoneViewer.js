@@ -15,6 +15,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [viewport, setViewport] = useState(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [toolsReady, setToolsReady] = useState(false);
 
   const totalFramesRef = useRef(totalFrames);
@@ -106,11 +107,27 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       cornerstoneWADOImageLoader.external.dicomParser = parser;
       cornerstoneWebImageLoader.external.cornerstone = cornerstone;
 
-      // Configure WADO Image Loader
+      // Configure WADO Image Loader with performance optimizations
       cornerstoneWADOImageLoader.configure({
         useWebWorkers: false,
         decodeConfig: {
           convertFloatPixelDataToInt: false,
+          // Performance optimizations for main thread processing
+          usePDFJS: false, // Disable PDF.js if not needed
+          strict: false,   // Less strict parsing for better performance
+        },
+        // Enable caching for better performance
+        maxWebWorkers: 0, // Explicitly disable web workers
+        startWebWorkersOnDemand: false,
+        webWorkerTaskPaths: [], // Empty array to prevent worker loading
+        taskConfiguration: {
+          decodeTask: {
+            loadCodecsOnStartup: true, // Pre-load codecs for faster decoding
+            initializeCodecsOnStartup: false,
+            codecsPath: undefined,
+            usePDFJS: false,
+            strict: false
+          }
         },
         beforeSend: function (xhr) {
           // Add authorization header for DICOM file requests
@@ -121,8 +138,13 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
           if (token) {
             xhr.setRequestHeader('Authorization', `Bearer ${token}`);
           }
+
+          // Add cache headers for better performance
+          xhr.setRequestHeader('Cache-Control', 'public, max-age=3600');
         }
       });
+
+      console.log('✅ WADO Image Loader configured with performance optimizations');
 
       // Initialize cornerstone tools
       const cornerstoneTools = cornerstoneToolsLib.default || cornerstoneToolsLib;
@@ -208,27 +230,38 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     try {
       setIsLoadingImage(true);
       setToolsReady(false);
+      setLoadingProgress(10);
+
       const apiPath = isAdmin
         ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}`;
 
-      console.log('Loading DICOM image from:', apiPath);
+      console.log('⏳ Loading DICOM image from:', apiPath);
+      setLoadingProgress(25);
 
       // Check for multi-frame
       const frames = parseInt(metadata?.numberOfFrames || '1');
       setTotalFrames(frames);
+      setLoadingProgress(40);
 
       const finalImageId = frames > 1 ? `${imageId}#frame=${currentFrame}` : imageId;
 
+      console.log('🔄 Decoding DICOM data...');
+      setLoadingProgress(60);
+
       const image = await cornerstone.loadImage(finalImageId);
+      setLoadingProgress(80);
+
+      console.log('🖼️ Displaying image...');
       cornerstone.displayImage(elementRef.current, image);
 
       // Store viewport for frame changes
       const currentViewport = cornerstone.getViewport(elementRef.current);
       setViewport(currentViewport);
+      setLoadingProgress(90);
 
-      console.log('DICOM image loaded and displayed successfully');
+      console.log('✅ DICOM image loaded and displayed successfully');
 
       // Wait for the image to be fully rendered before activating tools
       // This is critical to prevent the race condition in production
@@ -264,13 +297,13 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             eventTypes.forEach(eventType => {
               if (!canvas[`_${eventType}Listener`]) {
                 const listener = (e) => {
-                  console.log(`Canvas ${eventType} event:`, {
-                    type: e.type,
-                    button: e.button,
-                    clientX: e.clientX,
-                    clientY: e.clientY,
-                    currentTool: currentTool
-                  });
+                  // console.log(`Canvas ${eventType} event:`, {
+                  //   type: e.type,
+                  //   button: e.button,
+                  //   clientX: e.clientX,
+                  //   clientY: e.clientY,
+                  //   currentTool: currentTool
+                  // });
                 };
                 canvas.addEventListener(eventType, listener);
                 canvas[`_${eventType}Listener`] = listener;
@@ -308,10 +341,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
           cornerstone.setViewport(elementRef.current, viewport);
 
           if (toolActivated) {
-            console.log(`Tools activated successfully after image load: ${toolToActivate}`);
+            console.log(`✅ Tools activated successfully after image load: ${toolToActivate}`);
             setToolsReady(true);
+            setLoadingProgress(100);
           } else {
-            console.error('Failed to activate tools after multiple attempts');
+            console.error('❌ Failed to activate tools after multiple attempts');
             setToolsReady(false);
           }
         } catch (error) {
@@ -320,9 +354,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       }
 
     } catch (error) {
-      console.error('Error loading DICOM image:', error);
+      console.error('❌ Error loading DICOM image:', error);
+      setLoadingProgress(0);
     } finally {
       setIsLoadingImage(false);
+      // Reset progress after a short delay
+      setTimeout(() => setLoadingProgress(0), 1000);
     }
   };
 
@@ -690,12 +727,32 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             }}
           />
 
-          {/* Loading indicator */}
+          {/* Loading indicator with progress */}
           {(isLoadingImage || !toolsReady) && (
             <div className="loading-overlay">
               <div className="loading-spinner"></div>
               <div className="loading-text">
-                {isLoadingImage ? 'Loading DICOM image...' : 'Initializing tools...'}
+                {isLoadingImage ? (
+                  <>
+                    Loading DICOM image... {loadingProgress > 0 && `${loadingProgress}%`}
+                    <div style={{
+                      width: '200px',
+                      height: '4px',
+                      backgroundColor: 'rgba(255,255,255,0.3)',
+                      borderRadius: '2px',
+                      marginTop: '8px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${loadingProgress}%`,
+                        height: '100%',
+                        backgroundColor: '#007bff',
+                        borderRadius: '2px',
+                        transition: 'width 0.3s ease'
+                      }}></div>
+                    </div>
+                  </>
+                ) : 'Initializing tools...'}
               </div>
             </div>
           )}
