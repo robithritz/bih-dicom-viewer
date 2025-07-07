@@ -140,13 +140,22 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
 
       cornerstoneTools.init();
 
-      // Add tools
+      // Add tools globally first
       cornerstoneTools.addTool(cornerstoneTools.WwwcTool);
       cornerstoneTools.addTool(cornerstoneTools.ZoomTool);
       cornerstoneTools.addTool(cornerstoneTools.PanTool);
       cornerstoneTools.addTool(cornerstoneTools.LengthTool);
       cornerstoneTools.addTool(cornerstoneTools.AngleTool);
       cornerstoneTools.addTool(cornerstoneTools.RectangleRoiTool);
+
+      console.log('✅ Tools added globally:', {
+        Wwwc: !!cornerstoneTools.WwwcTool,
+        Zoom: !!cornerstoneTools.ZoomTool,
+        Pan: !!cornerstoneTools.PanTool,
+        Length: !!cornerstoneTools.LengthTool,
+        Angle: !!cornerstoneTools.AngleTool,
+        RectangleRoi: !!cornerstoneTools.RectangleRoiTool
+      });
 
       setCornerstone(cornerstone);
       setCornerstoneTools(cornerstoneTools);
@@ -163,7 +172,22 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
 
         // Verify the element is properly enabled
         const enabledElement = cornerstone.getEnabledElement(element);
-        console.log('Enabled element:', enabledElement);
+        console.log('✅ Enabled element:', enabledElement);
+
+        // CRITICAL: Add tools to this specific enabled element
+        try {
+          // Add tools to the specific enabled element
+          cornerstoneTools.addToolForElement(element, cornerstoneTools.WwwcTool);
+          cornerstoneTools.addToolForElement(element, cornerstoneTools.ZoomTool);
+          cornerstoneTools.addToolForElement(element, cornerstoneTools.PanTool);
+          cornerstoneTools.addToolForElement(element, cornerstoneTools.LengthTool);
+          cornerstoneTools.addToolForElement(element, cornerstoneTools.AngleTool);
+          cornerstoneTools.addToolForElement(element, cornerstoneTools.RectangleRoiTool);
+
+          console.log('✅ Tools added to enabled element');
+        } catch (toolError) {
+          console.warn('⚠️ addToolForElement failed, tools may already be added:', toolError);
+        }
 
         // Don't activate tools here - wait for image to load first
         console.log('Cornerstone element enabled, waiting for image load to activate tools');
@@ -338,6 +362,18 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         return;
       }
 
+      // Verify tools are available
+      const availableTools = {
+        Wwwc: !!cornerstoneTools.WwwcTool,
+        Zoom: !!cornerstoneTools.ZoomTool,
+        Pan: !!cornerstoneTools.PanTool,
+        Length: !!cornerstoneTools.LengthTool,
+        Angle: !!cornerstoneTools.AngleTool,
+        RectangleRoi: !!cornerstoneTools.RectangleRoiTool
+      };
+
+      console.log('Available tools:', availableTools);
+
       // Log current tool state before activation
       const toolState = cornerstoneTools.store.state;
       console.log('Current tool state before activation:', {
@@ -346,34 +382,76 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         currentTool: toolName
       });
 
-      // Deactivate all tools
-      cornerstoneTools.setToolPassive('Wwwc');
-      cornerstoneTools.setToolPassive('Zoom');
-      cornerstoneTools.setToolPassive('Pan');
-      cornerstoneTools.setToolPassive('Length');
-      cornerstoneTools.setToolPassive('Angle');
-      cornerstoneTools.setToolPassive('RectangleRoi');
+      // Get the element for tool operations
+      const element = elementRef.current;
 
-      // Activate selected tool
-      switch (toolName) {
-        case 'wwwc':
-          cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
-          break;
-        case 'zoom':
-          cornerstoneTools.setToolActive('Zoom', { mouseButtonMask: 1 });
-          break;
-        case 'pan':
-          cornerstoneTools.setToolActive('Pan', { mouseButtonMask: 1 });
-          break;
-        case 'length':
-          cornerstoneTools.setToolActive('Length', { mouseButtonMask: 1 });
-          break;
-        case 'angle':
-          cornerstoneTools.setToolActive('Angle', { mouseButtonMask: 1 });
-          break;
-        case 'roi':
-          cornerstoneTools.setToolActive('RectangleRoi', { mouseButtonMask: 1 });
-          break;
+      // Deactivate all tools using standard API
+      try {
+        cornerstoneTools.setToolPassive('Wwwc');
+        cornerstoneTools.setToolPassive('Zoom');
+        cornerstoneTools.setToolPassive('Pan');
+        cornerstoneTools.setToolPassive('Length');
+        cornerstoneTools.setToolPassive('Angle');
+        cornerstoneTools.setToolPassive('RectangleRoi');
+      } catch (deactivateError) {
+        console.warn('Error deactivating tools:', deactivateError);
+      }
+
+      // Activate selected tool using standard API with proper configuration
+      try {
+        const toolConfig = { mouseButtonMask: 1 };
+
+        switch (toolName) {
+          case 'wwwc':
+            cornerstoneTools.setToolActive('Wwwc', toolConfig);
+            break;
+          case 'zoom':
+            cornerstoneTools.setToolActive('Zoom', toolConfig);
+            break;
+          case 'pan':
+            cornerstoneTools.setToolActive('Pan', toolConfig);
+            break;
+          case 'length':
+            cornerstoneTools.setToolActive('Length', toolConfig);
+            break;
+          case 'angle':
+            cornerstoneTools.setToolActive('Angle', toolConfig);
+            break;
+          case 'roi':
+            cornerstoneTools.setToolActive('RectangleRoi', toolConfig);
+            break;
+          default:
+            console.warn(`Unknown tool: ${toolName}, defaulting to wwwc`);
+            cornerstoneTools.setToolActive('Wwwc', toolConfig);
+            break;
+        }
+
+        console.log(`✅ Tool ${toolName} activated successfully`);
+      } catch (activationError) {
+        console.error(`❌ Failed to activate tool ${toolName}:`, activationError);
+
+        // Try alternative activation method
+        try {
+          console.log(`🔄 Trying alternative activation for ${toolName}`);
+          switch (toolName) {
+            case 'wwwc':
+              cornerstoneTools.wwwc.activate(element, 1); // mouseButtonMask 1
+              break;
+            case 'zoom':
+              cornerstoneTools.zoom.activate(element, 1);
+              break;
+            case 'pan':
+              cornerstoneTools.pan.activate(element, 1);
+              break;
+            default:
+              cornerstoneTools.wwwc.activate(element, 1);
+              break;
+          }
+          console.log(`✅ Alternative activation successful for ${toolName}`);
+        } catch (altError) {
+          console.error(`❌ Alternative activation also failed:`, altError);
+          throw activationError; // Re-throw original error for retry logic
+        }
       }
 
       setCurrentTool(toolName);
@@ -629,7 +707,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
           )}
 
           {/* Debug info for production tool debugging */}
-          <div style={{
+          {/* <div style={{
             position: 'absolute',
             top: '10px',
             right: '10px',
@@ -669,7 +747,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
                 📱 Swipe up/down to change frames
               </div>
             )}
-          </div>
+          </div> */}
         </div>
       </div>
 
