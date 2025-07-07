@@ -32,7 +32,7 @@ async function handleZipChunkUpload(req, res) {
   try {
     // Parse form data
     const form = formidable({
-      maxFileSize: 2 * 1024 * 1024, // 2MB max chunk size
+      maxFileSize: 10 * 1024 * 1024, // 10MB max chunk size
       keepExtensions: true,
       uploadDir: TEMP_DIR
     });
