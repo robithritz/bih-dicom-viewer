@@ -585,74 +585,20 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
   }, [loadFrameImage]); // Add loadFrameImage as dependency
 
-  // Add scroll and touch event listeners for frame navigation
+  // Add scroll event listener for desktop only (no touch events to avoid conflicts)
   useEffect(() => {
     const element = elementRef.current;
     if (!element || !handleScroll || totalFramesRef.current <= 1) return;
 
-    let touchStartY = 0;
-    let touchStartX = 0;
-    let lastTouchTime = 0;
-
-    // Touch start handler for mobile
-    const handleTouchStart = (e) => {
-      const touch = e.touches[0];
-      touchStartY = touch.clientY;
-      touchStartX = touch.clientX;
-      lastTouchTime = Date.now();
-      console.log('📱 Touch start for frame navigation:', { y: touchStartY, frames: totalFramesRef.current });
-    };
-
-    // Touch move handler for mobile swipe
-    const handleTouchMove = (e) => {
-      if (!touchStartY || totalFramesRef.current <= 1) return;
-
-      const touch = e.touches[0];
-      const deltaY = touchStartY - touch.clientY;
-      const deltaX = touchStartX - touch.clientX;
-      const timeDelta = Date.now() - lastTouchTime;
-
-      // Only process vertical swipes that are significant and not too slow
-      if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 50 && timeDelta < 1000) {
-        e.preventDefault();
-
-        const direction = deltaY > 0 ? 1 : -1; // Swipe up = next frame, swipe down = previous frame
-        const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + direction));
-
-        if (newFrame !== currentFramesRef.current) {
-          console.log(`📱 Touch swipe: Frame ${currentFramesRef.current} → ${newFrame}`);
-          setCurrentFrame(newFrame);
-          loadFrameImage(newFrame);
-        }
-
-        // Reset touch to prevent multiple triggers
-        touchStartY = 0;
-        touchStartX = 0;
-      }
-    };
-
-    // Touch end handler
-    const handleTouchEnd = (e) => {
-      touchStartY = 0;
-      touchStartX = 0;
-      lastTouchTime = 0;
-    };
-
-    // Add all event listeners
+    // Only add wheel events for desktop - no touch events to avoid tool conflicts
     element.addEventListener('wheel', handleScroll, { passive: false });
-    element.addEventListener('touchstart', handleTouchStart, { passive: false });
-    element.addEventListener('touchmove', handleTouchMove, { passive: false });
-    element.addEventListener('touchend', handleTouchEnd, { passive: false });
 
-    console.log(`📱 Frame navigation events added for ${totalFramesRef.current} frames`);
+    console.log(`🖱️ Desktop scroll navigation added for ${totalFramesRef.current} frames`);
 
     return () => {
       element.removeEventListener('wheel', handleScroll);
-      element.removeEventListener('touchstart', handleTouchStart);
-      element.removeEventListener('touchmove', handleTouchMove);
-      element.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [handleScroll, loadFrameImage]);
+  }, [handleScroll]);
 
 
 
@@ -763,6 +709,55 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             </div>
           )}
 
+          {/* Mobile Frame Navigation Buttons */}
+          {totalFrames > 1 && (
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-50">
+              {/* Previous Frame Button */}
+              <button
+                onClick={() => {
+                  if (currentFrame > 0) {
+                    setCurrentFrame(currentFrame - 1);
+                    loadFrameImage(currentFrame - 1);
+                  }
+                }}
+                disabled={currentFrame === 0}
+                className={`
+                  w-10 h-10 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentFrame === 0
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 cursor-pointer'
+                  }
+                  text-white text-lg font-bold
+                `}
+              >
+                ↑
+              </button>
+
+              {/* Next Frame Button */}
+              <button
+                onClick={() => {
+                  if (currentFrame < totalFrames - 1) {
+                    setCurrentFrame(currentFrame + 1);
+                    loadFrameImage(currentFrame + 1);
+                  }
+                }}
+                disabled={currentFrame === totalFrames - 1}
+                className={`
+                  w-10 h-10 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentFrame === totalFrames - 1
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 cursor-pointer'
+                  }
+                  text-white text-lg font-bold
+                `}
+              >
+                ↓
+              </button>
+            </div>
+          )}
+
           {/* Debug info for production tool debugging */}
           {/* <div style={{
             position: 'absolute',
@@ -801,7 +796,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             </button>
             {totalFrames > 1 && (
               <div style={{ marginTop: '5px', fontSize: '10px', color: '#ccc' }}>
-                📱 Swipe up/down to change frames
+                📱 Use ↑↓ buttons to change frames
               </div>
             )}
           </div> */}
