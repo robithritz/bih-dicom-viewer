@@ -20,22 +20,6 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' blob:",
-              "worker-src 'self' blob:",
-              "connect-src 'self' blob:",
-              "img-src 'self' data:",
-              "style-src 'self' 'unsafe-inline'",
-            ].join('; ')
-          }
-        ]
-      },
-      {
         source: '/api/dicom-file/:path*',
         headers: [
           {
