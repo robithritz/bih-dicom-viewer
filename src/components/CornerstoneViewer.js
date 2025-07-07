@@ -3,68 +3,6 @@ import { useRouter } from 'next/router';
 import Toolbar from './Toolbar';
 import FileBrowser from './FileBrowser';
 
-// CRITICAL: Block web workers immediately when this module loads in production
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
-  console.log('🚫 Blocking web workers for CSP compliance');
-
-  // Store original constructors if not already stored
-  if (window.Worker && !window._originalWorker) {
-    window._originalWorker = window.Worker;
-  }
-
-  // Replace Worker constructor with a blocking version
-  window.Worker = function (scriptURL, options) {
-    console.warn('🚫 Web Worker creation BLOCKED for CSP compliance:', scriptURL);
-
-    // Return a mock worker that satisfies the API but doesn't create actual workers
-    const mockWorker = {
-      postMessage: () => console.warn('Worker.postMessage called but workers are disabled'),
-      terminate: () => console.warn('Worker.terminate called but workers are disabled'),
-      addEventListener: () => console.warn('Worker.addEventListener called but workers are disabled'),
-      removeEventListener: () => console.warn('Worker.removeEventListener called but workers are disabled'),
-      dispatchEvent: () => { console.warn('Worker.dispatchEvent called but workers are disabled'); return false; },
-      onerror: null,
-      onmessage: null,
-      onmessageerror: null
-    };
-
-    return mockWorker;
-  };
-
-  // Block SharedWorker
-  if (window.SharedWorker && !window._originalSharedWorker) {
-    window._originalSharedWorker = window.SharedWorker;
-    window.SharedWorker = function (scriptURL, name) {
-      console.warn('🚫 SharedWorker creation BLOCKED for CSP compliance:', scriptURL);
-      throw new Error('SharedWorkers are disabled for CSP compliance');
-    };
-  }
-
-  // CRITICAL: Block blob URL creation which is used for workers
-  if (window.URL && window.URL.createObjectURL && !window._originalCreateObjectURL) {
-    window._originalCreateObjectURL = window.URL.createObjectURL;
-    window.URL.createObjectURL = function (object) {
-      if (object instanceof Blob) {
-        // Check if this blob might be for a worker
-        const blobText = object.text ? object.text() : Promise.resolve('');
-        blobText.then(content => {
-          if (content.includes('importScripts') || content.includes('self.onmessage') || content.includes('postMessage')) {
-            console.warn('🚫 Worker-related Blob detected and blocked:', content.substring(0, 100));
-          }
-        }).catch(() => {
-          // Ignore text extraction errors
-        });
-
-        console.warn('🚫 Blob URL creation BLOCKED to prevent worker creation');
-        throw new Error('Blob URL creation blocked for CSP compliance - workers not allowed');
-      }
-      return window._originalCreateObjectURL.call(this, object);
-    };
-  }
-
-  console.log('✅ Web worker blocking successfully installed');
-}
-
 export default function CornerstoneViewer({ filename, metadata, isAdmin = false }) {
   const elementRef = useRef(null);
   const router = useRouter();
@@ -168,9 +106,9 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       cornerstoneWADOImageLoader.external.dicomParser = parser;
       cornerstoneWebImageLoader.external.cornerstone = cornerstone;
 
-      // Configure WADO Image Loader - NEVER use web workers to prevent CSP violations
+      // Configure WADO Image Loader
       cornerstoneWADOImageLoader.configure({
-        useWebWorkers: false, // CRITICAL: Always false to prevent CSP violations
+        useWebWorkers: false,
         decodeConfig: {
           convertFloatPixelDataToInt: false,
         },
@@ -185,29 +123,6 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
           }
         }
       });
-
-      console.log('✅ WADO Image Loader configured WITHOUT web workers for CSP compliance');
-
-      // CRITICAL: Ensure web worker manager is completely disabled
-      if (cornerstoneWADOImageLoader.webWorkerManager) {
-        // Override the initialize method to prevent any worker creation
-        cornerstoneWADOImageLoader.webWorkerManager.initialize = function () {
-          console.log('🚫 Web worker manager initialization BLOCKED');
-          return Promise.resolve();
-        };
-
-        // Override terminate method
-        cornerstoneWADOImageLoader.webWorkerManager.terminate = function () {
-          console.log('🚫 Web worker manager termination called (no-op)');
-        };
-
-        // Set internal state to indicate no workers
-        if (cornerstoneWADOImageLoader.webWorkerManager.webWorkers) {
-          cornerstoneWADOImageLoader.webWorkerManager.webWorkers = [];
-        }
-
-        console.log('✅ Web worker manager completely disabled');
-      }
 
       // Initialize cornerstone tools
       const cornerstoneTools = cornerstoneToolsLib.default || cornerstoneToolsLib;
@@ -318,14 +233,38 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
 
           // Activate the current tool (or default to wwwc)
           const toolToActivate = currentTool || 'wwwc';
-          activateTool(toolToActivate);
+
+          // Multiple attempts to ensure tools are activated in production
+          let toolActivated = false;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              activateTool(toolToActivate);
+
+              // Verify the tool is actually active
+              const activeTools = cornerstoneTools.store.state.tools;
+              console.log('Active tools after activation:', Object.keys(activeTools));
+
+              toolActivated = true;
+              break;
+            } catch (toolError) {
+              console.warn(`Tool activation attempt ${attempt + 1} failed:`, toolError);
+              if (attempt < 2) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+            }
+          }
 
           // Force a viewport update to ensure tools are properly attached
           const viewport = cornerstone.getViewport(elementRef.current);
           cornerstone.setViewport(elementRef.current, viewport);
 
-          console.log(`Tools activated successfully after image load: ${toolToActivate}`);
-          setToolsReady(true);
+          if (toolActivated) {
+            console.log(`Tools activated successfully after image load: ${toolToActivate}`);
+            setToolsReady(true);
+          } else {
+            console.error('Failed to activate tools after multiple attempts');
+            setToolsReady(false);
+          }
         } catch (error) {
           console.error('Error activating tools after image load:', error);
         }
@@ -405,6 +344,28 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       }
 
       setCurrentTool(toolName);
+
+      // Ensure canvas is properly configured for interaction (critical for production)
+      const canvas = elementRef.current.querySelector('canvas');
+      if (canvas) {
+        canvas.style.pointerEvents = 'auto';
+        canvas.style.touchAction = 'none';
+        canvas.style.userSelect = 'none';
+        // Force focus to ensure events are captured
+        canvas.setAttribute('tabindex', '0');
+      }
+
+      // Force a redraw to ensure tools are properly attached
+      cornerstone.updateImage(elementRef.current);
+
+      // Add a simple test to verify mouse events are working
+      if (canvas && !canvas._testListenerAdded) {
+        canvas.addEventListener('mousedown', (e) => {
+          console.log(`Mouse event captured on canvas for tool: ${toolName}`, e.button);
+        });
+        canvas._testListenerAdded = true;
+      }
+
       console.log(`Tool ${toolName} activated successfully`);
     } catch (error) {
       console.error(`Error activating tool ${toolName}:`, error);
