@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [maxRetries, setMaxRetries] = useState(5);
   const [timeLeft, setTimeLeft] = useState(0);
 
-  const { isAuthenticated, loading: authLoading, checkAuth } = useAuth();
+  const { isAuthenticated, loading: authLoading, checkAuth, setUserData } = useAuth();
   const router = useRouter();
 
   // Redirect if already authenticated
@@ -110,8 +110,12 @@ export default function LoginPage() {
           localStorage.setItem('auth-token', data.token);
         }
 
-        // Refresh authentication state before redirecting
-        await checkAuth();
+        // Set user data directly from the response instead of calling checkAuth
+        if (data.patient) {
+          setUserData(data.patient);
+        }
+
+        // Redirect to home page
         router.replace('/');
       } else {
         setError(data.error);

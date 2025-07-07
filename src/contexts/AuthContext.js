@@ -74,8 +74,9 @@ export const AuthProvider = ({ children }) => {
           // If it's a network error and we haven't retried too many times, retry
           if (retryCount < 2) {
             console.log(`Retrying admin auth check (attempt ${retryCount + 1})`);
+            // Don't set loading/initialized state here, let the retry handle it
             setTimeout(() => checkAuth(retryCount + 1), 1000);
-            return;
+            return; // Early return prevents finally block from running
           }
           // After max retries, assume token is invalid
           localStorage.removeItem('admin-auth-token');
@@ -105,8 +106,9 @@ export const AuthProvider = ({ children }) => {
           // If it's a network error and we haven't retried too many times, retry
           if (retryCount < 2) {
             console.log(`Retrying patient auth check (attempt ${retryCount + 1})`);
+            // Don't set loading/initialized state here, let the retry handle it
             setTimeout(() => checkAuth(retryCount + 1), 1000);
-            return;
+            return; // Early return prevents finally block from running
           }
           // After max retries, assume token is invalid
           localStorage.removeItem('auth-token');
@@ -172,6 +174,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Function to directly set user data (useful for login flows)
+  const setUserData = (userData) => {
+    setUser(userData);
+    setLoading(false);
+    setIsInitialized(true);
+  };
+
   const value = {
     user,
     loading,
@@ -179,6 +188,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     checkAuth,
+    setUserData,
     isAuthenticated: !!user,
   };
 

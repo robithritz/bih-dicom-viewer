@@ -59,10 +59,16 @@ export default async function handler(req, res) {
       message: 'Login successful',
       token: token,
       patient: {
+        id: patient.idPatients.toString(),
+        urn: patient.urn,
         email: patient.email,
         patientId: patient.psid,
         firstName: patient.firstName,
-        lastName: patient.lastName
+        lastName: patient.lastName,
+        sex: patient.sex,
+        age: patient.age,
+        dob: patient.dob,
+        updatedAt: patient.updatedAt
       }
     });
 

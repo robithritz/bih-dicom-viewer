@@ -151,8 +151,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
 
     try {
       const apiPath = isAdmin
-        ? `/api/admin/dicom-file/${encodeURIComponent(filename)}`
-        : `/api/dicom-file/${encodeURIComponent(filename)}`;
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}`;
 
       // Check for multi-frame
@@ -198,8 +198,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
 
     try {
       const apiPath = isAdmin
-        ? `/api/admin/dicom-file/${encodeURIComponent(filename)}`
-        : `/api/dicom-file/${encodeURIComponent(filename)}`;
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
       const image = await cornerstoneRef.current.loadImage(imageId);
 
@@ -321,8 +321,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             currentFile={filename}
             onFileSelect={(newFilename) => {
               const viewerPath = isAdmin
-                ? `/admin/viewer/${encodeURIComponent(newFilename)}`
-                : `/viewer/${encodeURIComponent(newFilename)}`;
+                ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(newFilename)}`
+                : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(newFilename)}`;
               window.location.href = viewerPath;
             }}
             onClose={() => setShowFileBrowser(false)}
