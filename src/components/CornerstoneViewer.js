@@ -14,6 +14,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   const [rotation, setRotation] = useState(0);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [viewport, setViewport] = useState(null);
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [toolsReady, setToolsReady] = useState(false);
 
   const totalFramesRef = useRef(totalFrames);
   const currentFramesRef = useRef(currentFrame);
@@ -163,33 +165,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         const enabledElement = cornerstone.getEnabledElement(element);
         console.log('Enabled element:', enabledElement);
 
-        // Add a small delay to ensure element is fully enabled and rendered
-        setTimeout(() => {
-          try {
-            // Ensure the canvas is properly sized
-            cornerstone.resize(element);
-
-            // Set initial tool
-            cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
-            console.log('Cornerstone tools initialized successfully');
-
-            // Force a redraw to ensure everything is properly rendered
-            if (cornerstone.getImage && cornerstone.getImage(element)) {
-              cornerstone.updateImage(element);
-            }
-
-            // Ensure canvas has proper event handlers (critical for production)
-            const canvas = element.querySelector('canvas');
-            if (canvas) {
-              // Force canvas to be interactive
-              canvas.style.pointerEvents = 'auto';
-              canvas.style.touchAction = 'none';
-              console.log('Canvas event handlers configured');
-            }
-          } catch (toolError) {
-            console.error('Error setting initial tool:', toolError);
-          }
-        }, 200);
+        // Don't activate tools here - wait for image to load first
+        console.log('Cornerstone element enabled, waiting for image load to activate tools');
 
         // Scroll event will be added in separate useEffect
       }
@@ -205,6 +182,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
 
     try {
+      setIsLoadingImage(true);
+      setToolsReady(false);
       const apiPath = isAdmin
         ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
@@ -225,27 +204,52 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       const currentViewport = cornerstone.getViewport(elementRef.current);
       setViewport(currentViewport);
 
-      // Ensure tools are properly enabled after image load
-      if (cornerstoneTools && currentTool) {
-        setTimeout(() => {
-          // Re-enable the element to ensure tools work properly
-          try {
-            cornerstone.resize(elementRef.current);
-            activateTool(currentTool);
+      console.log('DICOM image loaded and displayed successfully');
 
-            // Force a viewport update to ensure tools are properly attached
-            const viewport = cornerstone.getViewport(elementRef.current);
-            cornerstone.setViewport(elementRef.current, viewport);
-          } catch (error) {
-            console.error('Error re-enabling tools after image load:', error);
+      // Wait for the image to be fully rendered before activating tools
+      // This is critical to prevent the race condition in production
+      await new Promise(resolve => {
+        // Use requestAnimationFrame to ensure the image is fully rendered
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      });
+
+      // Now safely initialize tools after image is fully rendered
+      if (cornerstoneTools) {
+        try {
+          // Ensure the canvas is properly sized
+          cornerstone.resize(elementRef.current);
+
+          // Ensure canvas has proper event handlers (critical for production)
+          const canvas = elementRef.current.querySelector('canvas');
+          if (canvas) {
+            canvas.style.pointerEvents = 'auto';
+            canvas.style.touchAction = 'none';
+            console.log('Canvas event handlers configured');
           }
-        }, 200);
-      }
 
-      console.log('DICOM image loaded successfully');
+          // Activate the current tool (or default to wwwc)
+          const toolToActivate = currentTool || 'wwwc';
+          activateTool(toolToActivate);
+
+          // Force a viewport update to ensure tools are properly attached
+          const viewport = cornerstone.getViewport(elementRef.current);
+          cornerstone.setViewport(elementRef.current, viewport);
+
+          console.log(`Tools activated successfully after image load: ${toolToActivate}`);
+          setToolsReady(true);
+        } catch (error) {
+          console.error('Error activating tools after image load:', error);
+        }
+      }
 
     } catch (error) {
       console.error('Error loading DICOM image:', error);
+    } finally {
+      setIsLoadingImage(false);
     }
   };
 
@@ -269,51 +273,6 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
   };
 
-  const loadFrameImage = useCallback(async (frameIndex) => {
-    if (!cornerstoneRef.current || !elementRef.current) return;
-
-    try {
-      const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
-      const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
-      const image = await cornerstoneRef.current.loadImage(imageId);
-
-      // Preserve viewport settings
-      if (viewport) {
-        cornerstoneRef.current.displayImage(elementRef.current, image, viewport);
-      } else {
-        cornerstoneRef.current.displayImage(elementRef.current, image);
-      }
-    } catch (error) {
-      console.error('Error loading frame:', error);
-    }
-  }, [filename, viewport]); // Add dependencies for useCallback
-
-  const handleScroll = useCallback((e) => {
-    if (totalFramesRef.current <= 1) return;
-
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 1 : -1;
-    const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + delta));
-
-    if (newFrame !== currentFramesRef.current) {
-      setCurrentFrame(newFrame);
-      loadFrameImage(newFrame);
-    }
-  }, [loadFrameImage]); // Add loadFrameImage as dependency
-
-  // Add scroll event listener when handleScroll is ready
-  useEffect(() => {
-    const element = elementRef.current;
-    if (element && handleScroll) {
-      element.addEventListener('wheel', handleScroll);
-      return () => {
-        element.removeEventListener('wheel', handleScroll);
-      };
-    }
-  }, [handleScroll]);
-
   const activateTool = (toolName) => {
     if (!cornerstoneTools || !elementRef.current) {
       console.error('Cannot activate tool: cornerstoneTools or element not available');
@@ -322,6 +281,13 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
 
     try {
       console.log(`Activating tool: ${toolName}`);
+
+      // Ensure the element is still enabled
+      const enabledElement = cornerstone.getEnabledElement(elementRef.current);
+      if (!enabledElement) {
+        console.error('Element is not enabled, cannot activate tools');
+        return;
+      }
 
       // Deactivate all tools
       cornerstoneTools.setToolPassive('Wwwc');
@@ -357,8 +323,80 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       console.log(`Tool ${toolName} activated successfully`);
     } catch (error) {
       console.error(`Error activating tool ${toolName}:`, error);
+
+      // Fallback: try to re-enable the element and retry
+      try {
+        console.log('Attempting to re-enable element and retry tool activation');
+        cornerstone.resize(elementRef.current);
+
+        // Retry tool activation after a brief delay
+        setTimeout(() => {
+          activateTool(toolName);
+        }, 100);
+      } catch (fallbackError) {
+        console.error('Fallback tool activation also failed:', fallbackError);
+      }
     }
   };
+
+  const loadFrameImage = useCallback(async (frameIndex) => {
+    if (!cornerstoneRef.current || !elementRef.current) return;
+
+    try {
+      const apiPath = isAdmin
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
+      const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
+      const image = await cornerstoneRef.current.loadImage(imageId);
+
+      // Preserve viewport settings
+      if (viewport) {
+        cornerstoneRef.current.displayImage(elementRef.current, image, viewport);
+      } else {
+        cornerstoneRef.current.displayImage(elementRef.current, image);
+      }
+
+      // Ensure tools remain active after frame change
+      if (cornerstoneTools && currentTool) {
+        // Small delay to ensure frame is rendered
+        setTimeout(() => {
+          try {
+            activateTool(currentTool);
+          } catch (error) {
+            console.error('Error reactivating tool after frame change:', error);
+          }
+        }, 50);
+      }
+    } catch (error) {
+      console.error('Error loading frame:', error);
+    }
+  }, [filename, viewport, cornerstoneTools, currentTool, activateTool]); // Add dependencies for useCallback
+
+  const handleScroll = useCallback((e) => {
+    if (totalFramesRef.current <= 1) return;
+
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 1 : -1;
+    const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + delta));
+
+    if (newFrame !== currentFramesRef.current) {
+      setCurrentFrame(newFrame);
+      loadFrameImage(newFrame);
+    }
+  }, [loadFrameImage]); // Add loadFrameImage as dependency
+
+  // Add scroll event listener when handleScroll is ready
+  useEffect(() => {
+    const element = elementRef.current;
+    if (element && handleScroll) {
+      element.addEventListener('wheel', handleScroll);
+      return () => {
+        element.removeEventListener('wheel', handleScroll);
+      };
+    }
+  }, [handleScroll]);
+
+
 
   const clearMeasurements = () => {
     if (!cornerstoneTools || !elementRef.current) return;
@@ -421,6 +459,16 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             className="cornerstone-element"
             onContextMenu={(e) => e.preventDefault()}
           />
+
+          {/* Loading indicator */}
+          {(isLoadingImage || !toolsReady) && (
+            <div className="loading-overlay">
+              <div className="loading-spinner"></div>
+              <div className="loading-text">
+                {isLoadingImage ? 'Loading DICOM image...' : 'Initializing tools...'}
+              </div>
+            </div>
+          )}
 
           {totalFrames > 1 && (
             <div className="frame-info">
