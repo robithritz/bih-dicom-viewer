@@ -69,7 +69,7 @@ export default function PatientPortal() {
         <div className="container">
           <div className="header">
             <h1 className="flex justify-center">
-              <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+              <Image src={`${router.basePath}/images/bih-logo.png`} alt="Logo" width={200} height={80} />
               DICOM Viewer</h1>
             <p>Loading your medical imaging studies...</p>
           </div>
@@ -84,7 +84,7 @@ export default function PatientPortal() {
         <div className="container">
           <div className="header">
             <h1 className="flex justify-center">
-              <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+              <Image src={`${router.basePath}/images/bih-logo.png`} alt="Logo" width={200} height={80} />
               DICOM Viewer
             </h1>
             <p style={{ color: 'red' }}>Error: {error}</p>
@@ -100,7 +100,7 @@ export default function PatientPortal() {
       <div className="container">
         <div className="header">
           <h1 className="flex justify-center">
-            <Image src="/images/bih-logo.png" alt="Logo" width={200} height={80} />
+            <Image src={`${router.basePath}/images/bih-logo.png`} alt="Logo" width={200} height={80} />
             DICOM Viewer
           </h1>
           <p>Welcome, {user?.firstName} - View your medical imaging results</p>
