@@ -5,34 +5,52 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [studyInfo, setStudyInfo] = useState(null);
 
   useEffect(() => {
     fetchFiles();
-  }, []);
+  }, [currentFile]); // Refetch when current file changes
 
   const fetchFiles = async () => {
+    if (!currentFile) {
+      setError('No current file specified');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+      // Use the new study-based API that filters files by the same study as currentFile
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/files?patient=${patientId}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/files`;
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/study-files/${encodeURIComponent(currentFile)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/study-files/${encodeURIComponent(currentFile)}`;
 
       const token = isAdmin
         ? `Bearer ${localStorage.getItem('admin-auth-token')}`
         : `Bearer ${localStorage.getItem('auth-token')}`;
-      const response = await fetch(apiPath,
-        {
-          headers: {
-            'Authorization': token
-          }
+
+      console.log('Fetching study files for:', currentFile);
+
+      const response = await fetch(apiPath, {
+        headers: {
+          'Authorization': token
         }
-      );
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to fetch files');
+        throw new Error('Failed to fetch study files');
       }
+
       const data = await response.json();
-      setFiles(data);
+      setFiles(data.files || []);
+      setStudyInfo({
+        studyUID: data.studyUID,
+        totalFiles: data.totalFiles
+      });
+
+      console.log(`Loaded ${data.files?.length || 0} files from study ${data.studyUID}`);
     } catch (err) {
+      console.error('Error fetching study files:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -42,7 +60,12 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
   return (
     <div className="file-browser">
       <div className="file-browser-header">
-        <h3>📁 DICOM Files</h3>
+        <h3>📁 Study Files</h3>
+        {studyInfo && (
+          <div className="study-info">
+            <small>{studyInfo.totalFiles} files in this study</small>
+          </div>
+        )}
         <button className="close-btn" onClick={onClose} title="Close file browser">
           ✕
         </button>
@@ -59,7 +82,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
         )}
 
         {!loading && !error && files.length === 0 && (
-          <div className="empty">No DICOM files found</div>
+          <div className="empty">No files found in this study</div>
         )}
 
         {!loading && !error && files.map((file, index) => (
