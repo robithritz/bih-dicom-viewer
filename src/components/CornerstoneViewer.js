@@ -17,6 +17,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [toolsReady, setToolsReady] = useState(false);
+  const [studyFiles, setStudyFiles] = useState([]);
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
 
   const totalFramesRef = useRef(totalFrames);
   const currentFramesRef = useRef(currentFrame);
@@ -34,6 +36,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   useEffect(() => {
     if (cornerstone && filename) {
       loadDicomImage();
+      loadStudyFiles(); // Load study files for navigation
     }
   }, [cornerstone, filename]);
 
@@ -539,6 +542,68 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
   };
 
+  // Load study files for navigation
+  const loadStudyFiles = async () => {
+    try {
+      const apiPath = isAdmin
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/study-files/${encodeURIComponent(filename)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/study-files/${encodeURIComponent(filename)}`;
+
+      const token = isAdmin
+        ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+        : `Bearer ${localStorage.getItem('auth-token')}`;
+
+      const response = await fetch(apiPath, {
+        headers: { 'Authorization': token }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const files = data.files || [];
+
+        // Sort files by series number, then by instance number
+        const sortedFiles = files.sort((a, b) => {
+          if (a.seriesNumber !== b.seriesNumber) {
+            return a.seriesNumber - b.seriesNumber;
+          }
+          return a.instanceNumber - b.instanceNumber;
+        });
+
+        setStudyFiles(sortedFiles);
+
+        // Find current file index
+        const currentIndex = sortedFiles.findIndex(file => file.name === filename);
+        setCurrentFileIndex(Math.max(0, currentIndex));
+
+        console.log(`📁 Loaded ${sortedFiles.length} files in study, current file index: ${currentIndex}`);
+      }
+    } catch (error) {
+      console.warn('Could not load study files for navigation:', error);
+    }
+  };
+
+  // Navigate to previous file in study
+  const goToPreviousFile = () => {
+    if (studyFiles.length > 0 && currentFileIndex > 0) {
+      const previousFile = studyFiles[currentFileIndex - 1];
+      const viewerPath = isAdmin
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(previousFile.name)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(previousFile.name)}`;
+      window.location.href = viewerPath;
+    }
+  };
+
+  // Navigate to next file in study
+  const goToNextFile = () => {
+    if (studyFiles.length > 0 && currentFileIndex < studyFiles.length - 1) {
+      const nextFile = studyFiles[currentFileIndex + 1];
+      const viewerPath = isAdmin
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(nextFile.name)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(nextFile.name)}`;
+      window.location.href = viewerPath;
+    }
+  };
+
   const loadFrameImage = useCallback(async (frameIndex) => {
     if (!cornerstoneRef.current || !elementRef.current) return;
 
@@ -628,6 +693,25 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
     }
   };
 
+  // Add keyboard navigation for file switching
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Only handle arrow keys if not in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.key === 'ArrowLeft' && studyFiles.length > 1 && currentFileIndex > 0) {
+        e.preventDefault();
+        goToPreviousFile();
+      } else if (e.key === 'ArrowRight' && studyFiles.length > 1 && currentFileIndex < studyFiles.length - 1) {
+        e.preventDefault();
+        goToNextFile();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [studyFiles, currentFileIndex, goToPreviousFile, goToNextFile]);
+
   return (
     <div className="cornerstone-container">
       <Toolbar
@@ -709,9 +793,57 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             </div>
           )}
 
+          {/* File Navigation Arrows */}
+          {studyFiles.length > 1 && (
+            <>
+              {/* Previous File Button (Left Side) */}
+              <button
+                onClick={goToPreviousFile}
+                disabled={currentFileIndex === 0}
+                className={`
+                  absolute left-4 top-1/2 transform -translate-y-1/2
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg z-50
+                  ${currentFileIndex === 0
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
+                  }
+                  text-white text-xl font-bold
+                `}
+                title={`Previous file (${currentFileIndex} of ${studyFiles.length})`}
+              >
+                ←
+              </button>
+
+              {/* Next File Button (Right Side) */}
+              <button
+                onClick={goToNextFile}
+                disabled={currentFileIndex === studyFiles.length - 1}
+                className={`
+                  absolute right-4 top-1/2 transform -translate-y-1/2
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg z-40
+                  ${currentFileIndex === studyFiles.length - 1
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
+                  }
+                  text-white text-xl font-bold
+                `}
+                title={`Next file (${currentFileIndex + 2} of ${studyFiles.length})`}
+              >
+                →
+              </button>
+
+              {/* File Navigation Info */}
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm z-50">
+                File {currentFileIndex + 1} of {studyFiles.length}
+              </div>
+            </>
+          )}
+
           {/* Mobile Frame Navigation Buttons */}
           {totalFrames > 1 && (
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-50">
+            <div className="absolute right-16 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-50">
               {/* Previous Frame Button */}
               <button
                 onClick={() => {
