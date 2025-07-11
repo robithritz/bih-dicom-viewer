@@ -90,7 +90,7 @@ export default function AdminViewerPage() {
           zIndex: 1000
         }}>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.replace('/portal')}
             className="btn btn-primary"
           >
             ← Back to Portal
