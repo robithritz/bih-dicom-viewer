@@ -52,7 +52,7 @@ export default function ZipUpload({ onUploadComplete }) {
     // Extract patient ID from filename format: {patient_id}_{episode_id}.zip
     const nameWithoutExt = filename.replace('.zip', '');
     const parts = nameWithoutExt.split('_');
-    
+
     if (parts.length >= 2) {
       // Return patient_id (first part before underscore)
       return parts[0];
@@ -65,7 +65,7 @@ export default function ZipUpload({ onUploadComplete }) {
   const handleUpload = async (zipFile) => {
     // Parse patient ID from filename
     const patientId = parsePatientIdFromFilename(zipFile.name);
-    
+
     if (!patientId) {
       alert('Could not parse patient ID from filename. Please use format: {patient_id}_{episode_id}.zip');
       return;
@@ -212,7 +212,7 @@ export default function ZipUpload({ onUploadComplete }) {
               <div className="upload-icon">📦</div>
               <h3>Drop ZIP file here</h3>
               <p>or click to select ZIP file</p>
-              <small>Format: {'{patient_id}_{episode_id}.zip'}</small>
+              <small>Format: {'{URN}_{episode_id}.zip'}</small>
               <small>Contains DICOM files (.dcm)</small>
             </div>
           )}
