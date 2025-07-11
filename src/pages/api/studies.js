@@ -1,4 +1,4 @@
-import { getDicomFiles, organizeDicomStudies } from '../../lib/dicom';
+import { getDicomFilesByPatientId, organizeDicomStudies } from '../../lib/dicom';
 import { requireAuth } from '../../lib/auth-middleware';
 
 async function handler(req, res) {
@@ -12,8 +12,8 @@ async function handler(req, res) {
 
     console.log('Loading studies for authenticated patient:', patientId);
 
-    const files = getDicomFiles(patientId);
-    console.log("FILES" + files);
+    const files = getDicomFilesByPatientId(patientId);
+    console.log("FILES for patient", patientId, ":", files);
     const studies = organizeDicomStudies(files);
 
     res.status(200).json({

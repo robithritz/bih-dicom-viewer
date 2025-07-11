@@ -4,16 +4,16 @@ import dicomParser from 'dicom-parser';
 
 export const DICOM_DIR = path.join(process.cwd(), 'DICOM');
 
-export function getDicomFiles(patientId = null) {
+export function getDicomFiles(folderName = null) {
   try {
-    if (patientId) {
-      // Look for files in patient-specific directory
-      const patientDir = path.join(DICOM_DIR, patientId);
-      if (fs.existsSync(patientDir)) {
-        const files = fs.readdirSync(patientDir);
+    if (folderName) {
+      // Look for files in specific folder (could be patient ID or full folder name like "000012_0001")
+      const targetDir = path.join(DICOM_DIR, folderName);
+      if (fs.existsSync(targetDir)) {
+        const files = fs.readdirSync(targetDir);
         return files
           .filter(file => file.toLowerCase().endsWith('.dcm') || file.toLowerCase().endsWith('.dicom'))
-          .map(file => path.join(patientId, file)); // Include patient folder in path
+          .map(file => path.join(folderName, file)); // Include folder in path
       }
       return [];
     } else {
@@ -49,6 +49,49 @@ export function getDicomFiles(patientId = null) {
     }
   } catch (error) {
     console.error('Error reading DICOM directory:', error);
+    return [];
+  }
+}
+
+/**
+ * Get DICOM files for a specific patient ID by searching all folders
+ * This handles the new folder structure where folders are named like "000012_0001"
+ * but we want to find all files for patient "000012"
+ */
+export function getDicomFilesByPatientId(patientId) {
+  try {
+    const allFiles = [];
+
+    if (!fs.existsSync(DICOM_DIR)) {
+      return [];
+    }
+
+    const entries = fs.readdirSync(DICOM_DIR, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const folderName = entry.name;
+
+        // Check if this folder belongs to the patient
+        // Handle both old format (just patient ID) and new format (patient_episode)
+        const folderPatientId = folderName.split('_')[0]; // Get patient ID part
+
+        if (folderPatientId === patientId) {
+          const folderPath = path.join(DICOM_DIR, folderName);
+          const files = fs.readdirSync(folderPath);
+
+          const dicomFiles = files
+            .filter(file => file.toLowerCase().endsWith('.dcm') || file.toLowerCase().endsWith('.dicom'))
+            .map(file => path.join(folderName, file)); // Include full folder name in path
+
+          allFiles.push(...dicomFiles);
+        }
+      }
+    }
+
+    return allFiles;
+  } catch (error) {
+    console.error('Error reading DICOM files by patient ID:', error);
     return [];
   }
 }
@@ -265,7 +308,8 @@ export function getSeriesFiles(filename) {
       return { files: [filename] };
     }
 
-    const files = getDicomFiles();
+    // Get all DICOM files to search for series files
+    const files = getDicomFiles(); // Get all files from all folders
     const seriesFiles = [];
 
     for (const file of files) {

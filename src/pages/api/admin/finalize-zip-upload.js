@@ -56,12 +56,12 @@ async function assembleZipFile(sessionId, session) {
 /**
  * Extract ZIP file and move DICOM files
  */
-async function extractZipFile(zipPath, patientId, sessionId) {
-  const patientDir = path.join(DICOM_DIR, patientId);
+async function extractZipFile(zipPath, folderName, sessionId) {
+  const targetDir = path.join(DICOM_DIR, folderName);
 
-  // Ensure patient directory exists
-  if (!fs.existsSync(patientDir)) {
-    fs.mkdirSync(patientDir, { recursive: true });
+  // Ensure target directory exists
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
   }
 
   return new Promise((resolve, reject) => {
@@ -126,16 +126,16 @@ async function extractZipFile(zipPath, patientId, sessionId) {
           }
 
           // Handle duplicate filenames
-          let targetPath = path.join(patientDir, fileName);
+          let targetPath = path.join(targetDir, fileName);
           let counter = 1;
           while (fs.existsSync(targetPath)) {
             const ext = path.extname(fileName);
             const nameWithoutExt = path.basename(fileName, ext);
-            targetPath = path.join(patientDir, `${nameWithoutExt}_${counter}${ext}`);
+            targetPath = path.join(targetDir, `${nameWithoutExt}_${counter}${ext}`);
             counter++;
           }
 
-          // Write file to patient directory
+          // Write file to target directory
           const writeStream = fs.createWriteStream(targetPath);
           readStream.pipe(writeStream);
 
@@ -161,6 +161,47 @@ async function extractZipFile(zipPath, patientId, sessionId) {
       });
 
       zipfile.on('end', () => {
+        // Clean up unwanted files from target directory
+        try {
+          const targetFiles = fs.readdirSync(targetDir);
+          const unwantedFiles = targetFiles.filter(file => {
+            return (
+              file.startsWith('._') ||           // macOS resource fork files
+              file === '.DS_Store' ||            // macOS folder metadata
+              file === 'Thumbs.db' ||            // Windows thumbnail cache
+              file === 'desktop.ini' ||          // Windows folder settings
+              file.startsWith('~$') ||           // Office temporary files
+              file.endsWith('.tmp') ||           // Temporary files
+              file === '__MACOSX'                // macOS metadata folder
+            );
+          });
+
+          for (const unwantedFile of unwantedFiles) {
+            const unwantedPath = path.join(targetDir, unwantedFile);
+
+            // Handle both files and directories
+            if (fs.statSync(unwantedPath).isDirectory()) {
+              // Remove directory recursively
+              fs.rmSync(unwantedPath, { recursive: true, force: true });
+              console.log(`🗑️ Removed unwanted directory: ${unwantedFile}`);
+            } else {
+              // Remove file
+              fs.unlinkSync(unwantedPath);
+              console.log(`🗑️ Removed unwanted file: ${unwantedFile}`);
+            }
+          }
+
+          if (unwantedFiles.length > 0) {
+            console.log(`✅ Cleaned up ${unwantedFiles.length} unwanted files/folders from ${folderName}`);
+            ExtractionSessionManager.update(sessionId, {
+              stage: 'Cleaning up',
+              message: `Removed ${unwantedFiles.length} unwanted files`
+            });
+          }
+        } catch (cleanupError) {
+          console.warn('⚠️ Failed to clean up unwanted files:', cleanupError);
+        }
+
         // Update final status
         ExtractionSessionManager.setComplete(sessionId, {
           dicomFilesExtracted,
@@ -225,6 +266,9 @@ async function handleFinalizeZipUpload(req, res) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Use patientId as folderName (which now contains the full zip name without extension)
+    const folderName = patientId;
+
     // Get upload session
     console.log('Looking for upload session:', sessionId);
     const uploadSession = UploadSessionManager.get(sessionId);
@@ -250,6 +294,7 @@ async function handleFinalizeZipUpload(req, res) {
 
     // Initialize extraction session
     ExtractionSessionManager.create(sessionId, {
+      folderName,
       patientId,
       stage: 'Assembling ZIP file',
       message: 'Combining uploaded chunks...'
@@ -262,7 +307,15 @@ async function handleFinalizeZipUpload(req, res) {
         const zipPath = await assembleZipFile(sessionId, uploadSession);
 
         // Extract and process
-        const result = await extractZipFile(zipPath, patientId, sessionId);
+        const result = await extractZipFile(zipPath, folderName, sessionId);
+
+        // Clean up temporary ZIP file
+        try {
+          fs.unlinkSync(zipPath);
+          console.log('🗑️ Temporary ZIP file cleaned up');
+        } catch (zipCleanupError) {
+          console.warn('⚠️ Failed to clean up temporary ZIP file:', zipCleanupError);
+        }
 
         // Clean up session directory
         const sessionDir = path.join(TEMP_DIR, sessionId);

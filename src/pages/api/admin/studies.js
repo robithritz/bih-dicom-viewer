@@ -1,4 +1,4 @@
-import { getDicomFiles, organizeDicomStudies } from '../../../lib/dicom';
+import { getDicomFiles, getDicomFilesByPatientId, organizeDicomStudies } from '../../../lib/dicom';
 import { requireAdminAuth } from '../../../lib/admin-auth-middleware';
 
 async function handler(req, res) {
@@ -11,8 +11,20 @@ async function handler(req, res) {
 
     console.log('Admin loading studies, patient filter:', patient);
 
-    // Admin can access all studies or filter by specific patient
-    const files = getDicomFiles(patient || null);
+    // Admin can access all studies or filter by specific patient/folder
+    let files;
+    if (patient) {
+      // Try exact folder match first, then patient ID search
+      files = getDicomFiles(patient);
+      if (files.length === 0) {
+        // If no exact folder match, try searching by patient ID across all folders
+        files = getDicomFilesByPatientId(patient);
+      }
+    } else {
+      // Get all files from all folders
+      files = getDicomFiles(null);
+    }
+
     const studies = organizeDicomStudies(files);
 
     res.status(200).json({

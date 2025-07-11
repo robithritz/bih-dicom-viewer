@@ -645,7 +645,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         {showFileBrowser && (
           <FileBrowser
             isAdmin={isAdmin}
-            patientId={filename.split('/')[0]}
+            patientId={filename.includes('/') ? filename.split('/')[0].split('_')[0] : filename} // Extract patient ID from folder name
             currentFile={filename}
             onFileSelect={(newFilename) => {
               const viewerPath = isAdmin
