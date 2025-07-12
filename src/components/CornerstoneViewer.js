@@ -1081,48 +1081,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             </>
           )}
 
-          {/* File Navigation within Series (smaller buttons) */}
-          {seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
-            <>
-              {/* Previous File in Series (Left, smaller) */}
-              <button
-                onClick={goToPreviousFileInSeries}
-                disabled={currentSeriesFileIndex === 0}
-                className={`
-                  absolute left-20 top-1/2 transform -translate-y-1/2
-                  w-8 h-8 rounded-full flex items-center justify-center
-                  transition-all duration-200 shadow-lg z-45
-                  ${currentSeriesFileIndex === 0
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
-                  }
-                  text-white text-sm font-bold
-                `}
-                title={`Previous file in series`}
-              >
-                ←
-              </button>
 
-              {/* Next File in Series (Right, smaller) */}
-              <button
-                onClick={goToNextFileInSeries}
-                disabled={currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1 || 0)}
-                className={`
-                  absolute right-20 top-1/2 transform -translate-y-1/2
-                  w-8 h-8 rounded-full flex items-center justify-center
-                  transition-all duration-200 shadow-lg z-45
-                  ${currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1 || 0)
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
-                  }
-                  text-white text-sm font-bold
-                `}
-                title={`Next file in series`}
-              >
-                →
-              </button>
-            </>
-          )}
 
           {/* Series File Scroll Bar (for large series like 451 files) */}
           {seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
