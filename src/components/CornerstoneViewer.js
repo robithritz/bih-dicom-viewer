@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Toolbar from './Toolbar';
 import FileBrowser from './FileBrowser';
 
-export default function CornerstoneViewer({ filename, metadata, isAdmin = false }) {
+export default function CornerstoneViewer({ filename, metadata, isAdmin = false, onFileBrowserToggle }) {
   const elementRef = useRef(null);
   const router = useRouter();
   const [cornerstone, setCornerstone] = useState(null);
@@ -13,6 +13,13 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   const [totalFrames, setTotalFrames] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [showFileBrowser, setShowFileBrowser] = useState(true); // Always show on desktop
+
+  // Notify parent component when showFileBrowser changes
+  useEffect(() => {
+    if (onFileBrowserToggle) {
+      onFileBrowserToggle(showFileBrowser);
+    }
+  }, [showFileBrowser, onFileBrowserToggle]);
   const [viewport, setViewport] = useState(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
