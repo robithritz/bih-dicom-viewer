@@ -27,6 +27,20 @@ async function handler(req, res) {
 
     const studies = organizeDicomStudies(files);
 
+    // get patient detail from db using studies.firstFile substring before first '_'
+    for (const study of Object.values(studies)) {
+      console.log("STUDENT", study.firstFile);
+      if (study.firstFile) {
+        const patientId = study.firstFile.split('_')[0];
+        const patient = await prisma.patient.findUnique({
+          where: { urn: patientId }
+        });
+        console.log("PATIENT ", patient);
+        studies[study.studyInstanceUID].uploadedPatientName = `${patient.firstName} ${patient.lastName}`;
+        studies[study.studyInstanceUID].uploadedPatientId = patientId;
+      }
+    }
+
     res.status(200).json({
       studies,
       patientFilter: patient || null,
