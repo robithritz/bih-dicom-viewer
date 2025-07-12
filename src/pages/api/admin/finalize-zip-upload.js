@@ -57,18 +57,30 @@ async function assembleZipFile(sessionId, session) {
  * Extract ZIP file and move DICOM files
  */
 async function extractZipFile(zipPath, folderName, sessionId) {
-  const targetDir = path.join(DICOM_DIR, folderName);
+  // Check if folder already exists and create unique name if needed
+  let finalFolderName = folderName;
+  let targetDir = path.join(DICOM_DIR, finalFolderName);
+
+  if (fs.existsSync(targetDir)) {
+    // Generate timestamp suffix
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: YYYY-MM-DDTHH-MM-SS
+    finalFolderName = `${folderName}-${timestamp}`;
+    targetDir = path.join(DICOM_DIR, finalFolderName);
+
+    console.log(`📁 Folder ${folderName} already exists, using ${finalFolderName} instead`);
+  }
 
   // Ensure target directory exists
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
+    console.log(`📁 Created directory: ${targetDir}`);
   }
 
   return new Promise((resolve, reject) => {
     // Update extraction status
     ExtractionSessionManager.update(sessionId, {
       stage: 'Extracting ZIP file',
-      message: 'Opening ZIP archive...'
+      message: `Opening ZIP archive... Target: ${finalFolderName}`
     });
 
     yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
@@ -209,12 +221,14 @@ async function extractZipFile(zipPath, folderName, sessionId) {
         });
         ExtractionSessionManager.update(sessionId, {
           stage: 'Completed',
-          message: `Successfully extracted ${dicomFilesExtracted} DICOM files`
+          message: `Successfully extracted ${dicomFilesExtracted} DICOM files to folder: ${finalFolderName}`,
+          finalFolderName: finalFolderName
         });
 
         resolve({
           dicomFilesExtracted,
-          totalFilesInZip: totalEntries
+          totalFilesInZip: totalEntries,
+          finalFolderName: finalFolderName
         });
       });
 
