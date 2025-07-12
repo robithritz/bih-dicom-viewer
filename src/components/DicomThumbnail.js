@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const DicomThumbnail = ({ filename, size = 150, className = '' }) => {
+const DicomThumbnail = ({ filename, size = 150, className = '', isAdmin = false }) => {
   const canvasRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,16 +17,31 @@ const DicomThumbnail = ({ filename, size = 150, className = '' }) => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-thumbnail/${filename}`);
-      if (!response.ok) {
-        throw new Error('Failed to load thumbnail');
-      }
+      // Use appropriate API endpoint based on admin/patient context
+      const apiPath = isAdmin
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-thumbnail/${encodeURIComponent(filename)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-thumbnail/${encodeURIComponent(filename)}`;
 
-      console.log("loadede thumnail" + filename);
+      // Get authentication token
+      const token = isAdmin
+        ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+        : `Bearer ${localStorage.getItem('auth-token')}`;
+
+      console.log('Loading thumbnail for:', filename, 'isAdmin:', isAdmin);
+
+      const response = await fetch(apiPath, {
+        headers: {
+          'Authorization': token
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load thumbnail: ${response.status} ${response.statusText}`);
+      }
 
       const imageData = await response.json();
       const canvas = canvasRef.current;
-      console.log("the canvas " + canvas);
+
       if (!canvas) {
         setLoading(false);
         return;
@@ -55,8 +70,6 @@ const DicomThumbnail = ({ filename, size = 150, className = '' }) => {
         ctx.clearRect(0, 0, size, size);
         ctx.drawImage(tempCanvas, 0, 0, size, size);
       }
-
-      console.log("till put image")
 
       setLoading(false);
     } catch (err) {
@@ -109,20 +122,15 @@ const DicomThumbnail = ({ filename, size = 150, className = '' }) => {
   }
 
   return (
-    <>
-      <canvas
-        ref={canvasRef}
-        className={`dicom-thumbnail ${className}`}
-        style={{
-          border: '1px solid #444',
-          borderRadius: '4px',
-          backgroundColor: '#000'
-        }}
-      />
-      <div style={{ color: 'red' }}>
-        Canvas ref: {canvasRef.current ? "Exists" : "NULL"}
-      </div>
-    </>
+    <canvas
+      ref={canvasRef}
+      className={`dicom-thumbnail ${className}`}
+      style={{
+        border: '1px solid #444',
+        borderRadius: '4px',
+        backgroundColor: '#000'
+      }}
+    />
   );
 };
 
