@@ -126,31 +126,31 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
           left: 0;
           width: 350px;
           height: 100vh;
-          background: white;
-          border-right: 1px solid #ddd;
+          background: #1a1a1a;
+          border-right: 1px solid #333;
           z-index: 1000;
           display: flex;
           flex-direction: column;
-          box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+          box-shadow: 2px 0 10px rgba(0,0,0,0.3);
         }
 
         .file-browser-header {
           padding: 16px;
-          border-bottom: 1px solid #eee;
+          border-bottom: 1px solid #333;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          background-color: #f8f9fa;
+          background-color: #2a2a2a;
         }
 
         .file-browser-header h3 {
           margin: 0;
           font-size: 16px;
-          color: #333;
+          color: #ffffff;
         }
 
         .study-info {
-          color: #666;
+          color: #aaa;
           font-size: 12px;
         }
 
@@ -161,12 +161,12 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
           cursor: pointer;
           padding: 4px 8px;
           border-radius: 4px;
-          color: #666;
+          color: #aaa;
         }
 
         .close-btn:hover {
-          background-color: #f0f0f0;
-          color: #333;
+          background-color: #444;
+          color: #fff;
         }
 
         .file-list {
@@ -178,7 +178,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
         .loading, .error {
           text-align: center;
           padding: 20px;
-          color: #666;
+          color: #aaa;
         }
 
         .error button {
@@ -195,18 +195,18 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
           display: flex;
           align-items: center;
           padding: 16px;
-          border-bottom: 1px solid #eee;
+          border-bottom: 1px solid #333;
           cursor: pointer;
           transition: background-color 0.2s;
         }
 
         .series-item:hover {
-          background-color: #f0f0f0;
+          background-color: #333;
         }
 
         .series-item.active {
-          background-color: #e3f2fd;
-          border-left: 4px solid #2196f3;
+          background-color: #2a4a6b;
+          border-left: 4px solid #64b5f6;
         }
 
         .series-info {
@@ -223,14 +223,14 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
 
         .series-number {
           font-weight: 700;
-          color: #1976d2;
+          color: #64b5f6;
           font-size: 16px;
         }
 
         .series-file-count {
           font-size: 12px;
-          color: #666;
-          background-color: #f0f0f0;
+          color: #aaa;
+          background-color: #444;
           padding: 4px 8px;
           border-radius: 12px;
           font-weight: 500;
@@ -238,7 +238,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
 
         .series-description {
           font-size: 14px;
-          color: #333;
+          color: #ddd;
           word-break: break-word;
           line-height: 1.4;
           font-weight: 500;
@@ -248,11 +248,12 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
           font-size: 18px;
           margin-left: 8px;
           flex-shrink: 0;
+          color: #64b5f6;
         }
 
         .empty {
           text-align: center;
-          color: #666;
+          color: #aaa;
           padding: 40px 20px;
           font-style: italic;
         }

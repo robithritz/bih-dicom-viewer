@@ -12,7 +12,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   const [currentFrame, setCurrentFrame] = useState(0);
   const [totalFrames, setTotalFrames] = useState(1);
   const [rotation, setRotation] = useState(0);
-  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [showFileBrowser, setShowFileBrowser] = useState(true); // Always show on desktop
   const [viewport, setViewport] = useState(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -945,7 +945,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   }, [seriesData, currentSeriesIndex, currentSeriesFileIndex, goToPreviousSeries, goToNextSeries, goToPreviousFileInSeries, goToNextFileInSeries]);
 
   return (
-    <div className="cornerstone-container">
+    <div className="cornerstone-container" style={{
+      marginLeft: showFileBrowser ? '350px' : '0',
+      transition: 'margin-left 0.3s ease',
+      width: showFileBrowser ? 'calc(100% - 350px)' : '100%'
+    }}>
       <Toolbar
         currentTool={currentTool}
         onToolChange={activateTool}

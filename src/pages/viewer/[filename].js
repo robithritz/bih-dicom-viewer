@@ -112,6 +112,7 @@ export default function ViewerPage() {
           top: 10px;
           right: 10px;
           z-index: 1000;
+          margin-left: 350px; /* Account for sidebar */
         }
 
         .back-button a {
