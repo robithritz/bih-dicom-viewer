@@ -19,6 +19,10 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   const [toolsReady, setToolsReady] = useState(false);
   const [studyFiles, setStudyFiles] = useState([]);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [seriesData, setSeriesData] = useState([]);
+  const [currentSeriesIndex, setCurrentSeriesIndex] = useState(0);
+  const [currentSeriesFileIndex, setCurrentSeriesFileIndex] = useState(0);
+  const [isNavigatingInSeries, setIsNavigatingInSeries] = useState(false);
 
   const totalFramesRef = useRef(totalFrames);
   const currentFramesRef = useRef(currentFrame);
@@ -243,10 +247,62 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       console.log('⏳ Loading DICOM image from:', apiPath);
       setLoadingProgress(25);
 
-      // Check for multi-frame
-      const frames = parseInt(metadata?.numberOfFrames || '1');
+      // Enhanced multi-frame detection
+      let frames = parseInt(metadata?.numberOfFrames || '1');
+
+      console.log('📊 DICOM Frame Detection:', {
+        filename: filename,
+        numberOfFrames: metadata?.numberOfFrames,
+        parsedFrames: frames,
+        fileSize: 'Large file - should have many frames if 16MB',
+        allMetadata: metadata
+      });
+
+      // For large files that show only 1 frame, try alternative detection
+      if (frames === 1) {
+        console.log('⚠️ Only 1 frame detected - trying alternative methods...');
+
+        // Try to detect frames from loaded image data
+        try {
+          const testImageId = `wadouri:${apiPath}`;
+          const testImage = await cornerstone.loadImage(testImageId);
+
+          if (testImage && testImage.data) {
+            // Try different DICOM tags for frame count
+            const altFrames1 = testImage.data.string('x00280008'); // Number of Frames
+            const altFrames2 = testImage.data.uint16('x00280008'); // Number of Frames as uint16
+            const altFrames3 = testImage.data.string('x00540081'); // Number of Slices (for some multi-frame)
+
+            console.log('🔍 Alternative frame detection:', {
+              stringFrames: altFrames1,
+              uint16Frames: altFrames2,
+              slicesFrames: altFrames3
+            });
+
+            if (altFrames1 && parseInt(altFrames1) > 1) {
+              frames = parseInt(altFrames1);
+              console.log(`✅ Found ${frames} frames using string method`);
+            } else if (altFrames2 && altFrames2 > 1) {
+              frames = altFrames2;
+              console.log(`✅ Found ${frames} frames using uint16 method`);
+            } else if (altFrames3 && parseInt(altFrames3) > 1) {
+              frames = parseInt(altFrames3);
+              console.log(`✅ Found ${frames} frames using slices method`);
+            }
+          }
+        } catch (error) {
+          console.warn('Alternative frame detection failed:', error);
+        }
+      }
+
       setTotalFrames(frames);
       setLoadingProgress(40);
+
+      if (frames > 1) {
+        console.log(`🎞️ Multi-frame DICOM confirmed: ${frames} frames`);
+      } else {
+        console.log(`⚠️ Still showing 1 frame for large file - this may be incorrect`);
+      }
 
       const finalImageId = frames > 1 ? `${imageId}#frame=${currentFrame}` : imageId;
 
@@ -560,6 +616,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       if (response.ok) {
         const data = await response.json();
         const files = data.files || [];
+        const series = data.series || [];
 
         // Sort files by series number, then by instance number
         const sortedFiles = files.sort((a, b) => {
@@ -570,37 +627,144 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
         });
 
         setStudyFiles(sortedFiles);
+        setSeriesData(series);
 
-        // Find current file index
+        // Find current file index in all files
         const currentIndex = sortedFiles.findIndex(file => file.name === filename);
         setCurrentFileIndex(Math.max(0, currentIndex));
 
-        console.log(`📁 Loaded ${sortedFiles.length} files in study, current file index: ${currentIndex}`);
+        // Find current series and file index within that series
+        const currentSeriesIdx = data.currentSeriesIndex || 0;
+        setCurrentSeriesIndex(currentSeriesIdx);
+
+        if (series[currentSeriesIdx]) {
+          const currentSeries = series[currentSeriesIdx];
+          const fileIndexInSeries = currentSeries.files.findIndex(file => file.name === filename);
+          setCurrentSeriesFileIndex(Math.max(0, fileIndexInSeries));
+        }
+
+        console.log(`📁 Loaded ${sortedFiles.length} files in ${series.length} series:`,
+          series.map(s => `Series ${s.seriesNumber}: ${s.files.length} files (${s.seriesDescription})`));
+        console.log(`📍 Current position: Series ${currentSeriesIdx + 1}/${series.length}, File ${(series[currentSeriesIdx]?.files.findIndex(f => f.name === filename) || 0) + 1}/${series[currentSeriesIdx]?.files.length || 0}`);
       }
     } catch (error) {
       console.warn('Could not load study files for navigation:', error);
     }
   };
 
-  // Navigate to previous file in study
-  const goToPreviousFile = () => {
-    if (studyFiles.length > 0 && currentFileIndex > 0) {
-      const previousFile = studyFiles[currentFileIndex - 1];
-      const viewerPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(previousFile.name)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(previousFile.name)}`;
-      window.location.href = viewerPath;
+  // Navigate to previous series
+  const goToPreviousSeries = () => {
+    if (seriesData.length > 0 && currentSeriesIndex > 0) {
+      const previousSeries = seriesData[currentSeriesIndex - 1];
+      const firstFileInSeries = previousSeries.files[0];
+      if (firstFileInSeries) {
+        const viewerPath = isAdmin
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(firstFileInSeries.name)}`
+          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(firstFileInSeries.name)}`;
+        window.location.href = viewerPath;
+      }
     }
   };
 
-  // Navigate to next file in study
-  const goToNextFile = () => {
-    if (studyFiles.length > 0 && currentFileIndex < studyFiles.length - 1) {
-      const nextFile = studyFiles[currentFileIndex + 1];
-      const viewerPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(nextFile.name)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(nextFile.name)}`;
-      window.location.href = viewerPath;
+  // Navigate to next series
+  const goToNextSeries = () => {
+    if (seriesData.length > 0 && currentSeriesIndex < seriesData.length - 1) {
+      const nextSeries = seriesData[currentSeriesIndex + 1];
+      const firstFileInSeries = nextSeries.files[0];
+      if (firstFileInSeries) {
+        const viewerPath = isAdmin
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(firstFileInSeries.name)}`
+          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(firstFileInSeries.name)}`;
+        window.location.href = viewerPath;
+      }
+    }
+  };
+
+  // Navigate to previous file within current series
+  const goToPreviousFileInSeries = () => {
+    if (seriesData.length > 0 && currentSeriesIndex >= 0) {
+      const currentSeries = seriesData[currentSeriesIndex];
+      if (currentSeries && currentSeriesFileIndex > 0) {
+        const previousFile = currentSeries.files[currentSeriesFileIndex - 1];
+        const viewerPath = isAdmin
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(previousFile.name)}`
+          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(previousFile.name)}`;
+        window.location.href = viewerPath;
+      }
+    }
+  };
+
+  // Navigate to next file within current series
+  const goToNextFileInSeries = () => {
+    if (seriesData.length > 0 && currentSeriesIndex >= 0) {
+      const currentSeries = seriesData[currentSeriesIndex];
+      if (currentSeries && currentSeriesFileIndex < currentSeries.files.length - 1) {
+        const nextFile = currentSeries.files[currentSeriesFileIndex + 1];
+        const viewerPath = isAdmin
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(nextFile.name)}`
+          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(nextFile.name)}`;
+        window.location.href = viewerPath;
+      }
+    }
+  };
+
+  // Navigate to a specific file index within the current series (for smooth scrolling)
+  const navigateToFileInSeries = async (fileIndex) => {
+    if (seriesData.length > 0 && currentSeriesIndex >= 0) {
+      const currentSeries = seriesData[currentSeriesIndex];
+      if (currentSeries && fileIndex >= 0 && fileIndex < currentSeries.files.length) {
+        const targetFile = currentSeries.files[fileIndex];
+
+        setIsNavigatingInSeries(true);
+        setCurrentSeriesFileIndex(fileIndex);
+
+        try {
+          // Load the new file directly without changing URL (for smooth navigation)
+          const apiPath = isAdmin
+            ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-info/${encodeURIComponent(targetFile.name)}`
+            : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-info/${encodeURIComponent(targetFile.name)}`;
+
+          const token = isAdmin
+            ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+            : `Bearer ${localStorage.getItem('auth-token')}`;
+
+          const response = await fetch(apiPath, {
+            headers: { 'Authorization': token }
+          });
+
+          if (response.ok) {
+            const newMetadata = await response.json();
+
+            // Load the new DICOM image
+            const imageApiPath = isAdmin
+              ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
+              : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(targetFile.name)}`;
+
+            const imageId = `wadouri:${imageApiPath}`;
+
+            // Check for multi-frame
+            const frames = parseInt(newMetadata?.numberOfFrames || '1');
+            setTotalFrames(frames);
+            setCurrentFrame(0); // Reset to first frame of new file
+
+            const finalImageId = frames > 1 ? `${imageId}#frame=0` : imageId;
+
+            const image = await cornerstone.loadImage(finalImageId);
+            cornerstone.displayImage(elementRef.current, image);
+
+            // Reset viewport
+            const viewport = cornerstone.getDefaultViewportForImage(elementRef.current, image);
+            cornerstone.setViewport(elementRef.current, viewport);
+            setViewport(viewport);
+
+            console.log(`📄 Navigated to file ${fileIndex + 1}/${currentSeries.files.length} in series: ${targetFile.name}`);
+          }
+        } catch (error) {
+          console.error('Error navigating to file in series:', error);
+        } finally {
+          setIsNavigatingInSeries(false);
+        }
+      }
     }
   };
 
@@ -638,32 +802,58 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
   }, [filename, viewport, cornerstoneTools, currentTool, activateTool]); // Add dependencies for useCallback
 
   const handleScroll = useCallback((e) => {
-    if (totalFramesRef.current <= 1) return;
-
     e.preventDefault();
     const delta = e.deltaY > 0 ? 1 : -1;
-    const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + delta));
 
-    if (newFrame !== currentFramesRef.current) {
-      setCurrentFrame(newFrame);
-      loadFrameImage(newFrame);
+    // Priority 1: Multi-frame navigation within current file
+    if (totalFramesRef.current > 1) {
+      const newFrame = Math.max(0, Math.min(totalFramesRef.current - 1, currentFramesRef.current + delta));
+      if (newFrame !== currentFramesRef.current) {
+        setCurrentFrame(newFrame);
+        loadFrameImage(newFrame);
+        return; // Don't navigate files if we're navigating frames
+      }
     }
-  }, [loadFrameImage]); // Add loadFrameImage as dependency
+
+    // Priority 2: File navigation within current series (for large series like 451 files)
+    if (seriesData.length > 0 && currentSeriesIndex >= 0) {
+      const currentSeries = seriesData[currentSeriesIndex];
+      if (currentSeries && currentSeries.files.length > 1) {
+        const newFileIndex = Math.max(0, Math.min(currentSeries.files.length - 1, currentSeriesFileIndex + delta));
+        if (newFileIndex !== currentSeriesFileIndex && !isNavigatingInSeries) {
+          console.log(`🖱️ Scroll navigation: File ${newFileIndex + 1}/${currentSeries.files.length} in series`);
+          navigateToFileInSeries(newFileIndex);
+        }
+      }
+    }
+  }, [loadFrameImage, seriesData, currentSeriesIndex, currentSeriesFileIndex, isNavigatingInSeries, navigateToFileInSeries]);
 
   // Add scroll event listener for desktop only (no touch events to avoid conflicts)
   useEffect(() => {
     const element = elementRef.current;
-    if (!element || !handleScroll || totalFramesRef.current <= 1) return;
+    if (!element || !handleScroll) return;
+
+    // Check if we need scroll navigation (frames > 1 OR files in series > 1)
+    const currentSeries = seriesData[currentSeriesIndex];
+    const hasMultipleFrames = totalFramesRef.current > 1;
+    const hasMultipleFilesInSeries = currentSeries && currentSeries.files.length > 1;
+
+    if (!hasMultipleFrames && !hasMultipleFilesInSeries) return;
 
     // Only add wheel events for desktop - no touch events to avoid tool conflicts
     element.addEventListener('wheel', handleScroll, { passive: false });
 
-    console.log(`🖱️ Desktop scroll navigation added for ${totalFramesRef.current} frames`);
+    if (hasMultipleFrames) {
+      console.log(`🖱️ Desktop scroll navigation added for ${totalFramesRef.current} frames`);
+    }
+    if (hasMultipleFilesInSeries) {
+      console.log(`🖱️ Desktop scroll navigation added for ${currentSeries.files.length} files in series`);
+    }
 
     return () => {
       element.removeEventListener('wheel', handleScroll);
     };
-  }, [handleScroll]);
+  }, [handleScroll, seriesData, currentSeriesIndex]);
 
 
 
@@ -699,18 +889,60 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
       // Only handle arrow keys if not in an input field
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-      if (e.key === 'ArrowLeft' && studyFiles.length > 1 && currentFileIndex > 0) {
+      // Use Shift+Arrow for series navigation, Arrow for file navigation within series
+      if (e.shiftKey && e.key === 'ArrowLeft' && seriesData.length > 1 && currentSeriesIndex > 0) {
         e.preventDefault();
-        goToPreviousFile();
-      } else if (e.key === 'ArrowRight' && studyFiles.length > 1 && currentFileIndex < studyFiles.length - 1) {
+        goToPreviousSeries();
+      } else if (e.shiftKey && e.key === 'ArrowRight' && seriesData.length > 1 && currentSeriesIndex < seriesData.length - 1) {
         e.preventDefault();
-        goToNextFile();
+        goToNextSeries();
+      } else if (e.key === 'ArrowLeft' && seriesData.length > 0 && currentSeriesFileIndex > 0) {
+        e.preventDefault();
+        goToPreviousFileInSeries();
+      } else if (e.key === 'ArrowRight' && seriesData.length > 0 && currentSeriesFileIndex < (seriesData[currentSeriesIndex]?.files.length - 1 || 0)) {
+        e.preventDefault();
+        goToNextFileInSeries();
+      }
+
+      // Page Up/Down for faster navigation through large series (jump by 10)
+      else if (e.key === 'PageUp' && seriesData.length > 0 && currentSeriesIndex >= 0) {
+        e.preventDefault();
+        const currentSeries = seriesData[currentSeriesIndex];
+        if (currentSeries) {
+          const newIndex = Math.max(0, currentSeriesFileIndex - 10);
+          if (newIndex !== currentSeriesFileIndex) {
+            navigateToFileInSeries(newIndex);
+          }
+        }
+      } else if (e.key === 'PageDown' && seriesData.length > 0 && currentSeriesIndex >= 0) {
+        e.preventDefault();
+        const currentSeries = seriesData[currentSeriesIndex];
+        if (currentSeries) {
+          const newIndex = Math.min(currentSeries.files.length - 1, currentSeriesFileIndex + 10);
+          if (newIndex !== currentSeriesFileIndex) {
+            navigateToFileInSeries(newIndex);
+          }
+        }
+      }
+
+      // Home/End for jumping to first/last file in series
+      else if (e.key === 'Home' && seriesData.length > 0 && currentSeriesIndex >= 0) {
+        e.preventDefault();
+        if (currentSeriesFileIndex !== 0) {
+          navigateToFileInSeries(0);
+        }
+      } else if (e.key === 'End' && seriesData.length > 0 && currentSeriesIndex >= 0) {
+        e.preventDefault();
+        const currentSeries = seriesData[currentSeriesIndex];
+        if (currentSeries && currentSeriesFileIndex !== currentSeries.files.length - 1) {
+          navigateToFileInSeries(currentSeries.files.length - 1);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [studyFiles, currentFileIndex, goToPreviousFile, goToNextFile]);
+  }, [seriesData, currentSeriesIndex, currentSeriesFileIndex, goToPreviousSeries, goToNextSeries, goToPreviousFileInSeries, goToNextFileInSeries]);
 
   return (
     <div className="cornerstone-container">
@@ -793,52 +1025,144 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false 
             </div>
           )}
 
-          {/* File Navigation Arrows */}
-          {studyFiles.length > 1 && (
+          {/* Series Navigation */}
+          {seriesData.length > 1 && (
             <>
-              {/* Previous File Button (Left Side) */}
+              {/* Previous Series Button (Left Side) */}
               <button
-                onClick={goToPreviousFile}
-                disabled={currentFileIndex === 0}
+                onClick={goToPreviousSeries}
+                disabled={currentSeriesIndex === 0}
                 className={`
                   absolute left-4 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-50
-                  ${currentFileIndex === 0
+                  ${currentSeriesIndex === 0
                     ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
+                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'
                   }
                   text-white text-xl font-bold
                 `}
-                title={`Previous file (${currentFileIndex} of ${studyFiles.length})`}
+                title={`Previous series (${currentSeriesIndex + 1} of ${seriesData.length})`}
               >
-                ←
+                ⟨
               </button>
 
-              {/* Next File Button (Right Side) */}
+              {/* Next Series Button (Right Side) */}
               <button
-                onClick={goToNextFile}
-                disabled={currentFileIndex === studyFiles.length - 1}
+                onClick={goToNextSeries}
+                disabled={currentSeriesIndex === seriesData.length - 1}
                 className={`
                   absolute right-4 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-40
-                  ${currentFileIndex === studyFiles.length - 1
+                  ${currentSeriesIndex === seriesData.length - 1
                     ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
+                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'
                   }
                   text-white text-xl font-bold
                 `}
-                title={`Next file (${currentFileIndex + 2} of ${studyFiles.length})`}
+                title={`Next series (${currentSeriesIndex + 2} of ${seriesData.length})`}
+              >
+                ⟩
+              </button>
+
+              {/* Series Navigation Info */}
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg text-sm z-50">
+                <div className="text-center">
+                  <div className="font-bold">Series {currentSeriesIndex + 1} of {seriesData.length}</div>
+                  <div className="text-xs opacity-80">
+                    {seriesData[currentSeriesIndex]?.seriesDescription || 'Unknown Series'}
+                  </div>
+                  <div className="text-xs opacity-60">
+                    File {currentSeriesFileIndex + 1} of {seriesData[currentSeriesIndex]?.files.length || 0} in this series
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* File Navigation within Series (smaller buttons) */}
+          {seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+            <>
+              {/* Previous File in Series (Left, smaller) */}
+              <button
+                onClick={goToPreviousFileInSeries}
+                disabled={currentSeriesFileIndex === 0}
+                className={`
+                  absolute left-20 top-1/2 transform -translate-y-1/2
+                  w-8 h-8 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg z-45
+                  ${currentSeriesFileIndex === 0
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
+                  }
+                  text-white text-sm font-bold
+                `}
+                title={`Previous file in series`}
+              >
+                ←
+              </button>
+
+              {/* Next File in Series (Right, smaller) */}
+              <button
+                onClick={goToNextFileInSeries}
+                disabled={currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1 || 0)}
+                className={`
+                  absolute right-20 top-1/2 transform -translate-y-1/2
+                  w-8 h-8 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg z-45
+                  ${currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1 || 0)
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 cursor-pointer hover:scale-110'
+                  }
+                  text-white text-sm font-bold
+                `}
+                title={`Next file in series`}
               >
                 →
               </button>
-
-              {/* File Navigation Info */}
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm z-50">
-                File {currentFileIndex + 1} of {studyFiles.length}
-              </div>
             </>
+          )}
+
+          {/* Series File Scroll Bar (for large series like 451 files) */}
+          {seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+            <div className="absolute left-2 top-16 bottom-16 w-6 z-40">
+              <div className="relative h-full bg-gray-800 bg-opacity-50 rounded-full">
+                {/* Scroll track */}
+                <div
+                  className="absolute inset-0 rounded-full cursor-pointer"
+                  onClick={(e) => {
+                    const currentSeries = seriesData[currentSeriesIndex];
+                    if (!currentSeries) return;
+
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickY = e.clientY - rect.top;
+                    const scrollBarHeight = rect.height;
+                    const percentage = clickY / scrollBarHeight;
+                    const newFileIndex = Math.floor(percentage * currentSeries.files.length);
+                    const clampedIndex = Math.max(0, Math.min(currentSeries.files.length - 1, newFileIndex));
+
+                    if (clampedIndex !== currentSeriesFileIndex) {
+                      navigateToFileInSeries(clampedIndex);
+                    }
+                  }}
+                />
+
+                {/* Scroll thumb */}
+                <div
+                  className="absolute w-full bg-indigo-500 rounded-full transition-all duration-200 hover:bg-indigo-400"
+                  style={{
+                    height: `${Math.max(20, (1 / seriesData[currentSeriesIndex]?.files.length) * 100)}%`,
+                    top: `${(currentSeriesFileIndex / (seriesData[currentSeriesIndex]?.files.length - 1)) * (100 - Math.max(20, (1 / seriesData[currentSeriesIndex]?.files.length) * 100))}%`
+                  }}
+                />
+
+                {/* File count indicator */}
+                <div className="absolute -right-16 top-0 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+                  {currentSeriesFileIndex + 1} / {seriesData[currentSeriesIndex]?.files.length}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Mobile Frame Navigation Buttons */}

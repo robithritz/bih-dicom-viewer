@@ -113,6 +113,85 @@ export function parseDicomFile(filename) {
   }
 }
 
+/**
+ * Enhanced frame count extraction with multiple detection methods
+ */
+function extractFrameCount(dataSet) {
+  try {
+    console.log('🔍 Starting frame count extraction...');
+
+    // Method 1: Standard Number of Frames tag (0028,0008) as string
+    const framesString = dataSet.string('x00280008');
+    console.log(`🔍 Method 1 - String frames: "${framesString}"`);
+    if (framesString && parseInt(framesString) > 1) {
+      console.log(`📊 Frames detected (string): ${framesString}`);
+      return framesString;
+    }
+
+    // Method 2: Number of Frames as uint16
+    const framesUint16 = dataSet.uint16('x00280008');
+    console.log(`🔍 Method 2 - Uint16 frames: ${framesUint16}`);
+    if (framesUint16 && framesUint16 > 1) {
+      console.log(`📊 Frames detected (uint16): ${framesUint16}`);
+      return framesUint16.toString();
+    }
+
+    // Method 3: Number of Frames as uint32
+    const framesUint32 = dataSet.uint32('x00280008');
+    console.log(`🔍 Method 3 - Uint32 frames: ${framesUint32}`);
+    if (framesUint32 && framesUint32 > 1) {
+      console.log(`📊 Frames detected (uint32): ${framesUint32}`);
+      return framesUint32.toString();
+    }
+
+    // Method 4: Check for Enhanced MR/CT multi-frame tags
+    const enhancedFrames = dataSet.string('x00540081'); // Number of Slices
+    if (enhancedFrames && parseInt(enhancedFrames) > 1) {
+      console.log(`📊 Frames detected (enhanced): ${enhancedFrames}`);
+      return enhancedFrames;
+    }
+
+    // Method 5: Try to detect from pixel data size (rough estimation)
+    const pixelData = dataSet.elements.x7fe00010;
+    console.log(`🔍 Method 5 - Pixel data analysis:`, {
+      hasPixelData: !!pixelData,
+      pixelDataLength: pixelData?.length || 0
+    });
+
+    if (pixelData && pixelData.length) {
+      const rows = dataSet.uint16('x00280010') || 512;
+      const columns = dataSet.uint16('x00280011') || 512;
+      const bitsAllocated = dataSet.uint16('x00280100') || 16;
+
+      const expectedSingleFrameSize = rows * columns * (bitsAllocated / 8);
+      const actualDataSize = pixelData.length;
+
+      console.log(`🔍 Pixel data calculation:`, {
+        rows,
+        columns,
+        bitsAllocated,
+        expectedSingleFrameSize,
+        actualDataSize,
+        ratio: actualDataSize / expectedSingleFrameSize
+      });
+
+      if (actualDataSize > expectedSingleFrameSize * 1.5) {
+        const estimatedFrames = Math.round(actualDataSize / expectedSingleFrameSize);
+        console.log(`📊 Frames estimated from pixel data size: ${estimatedFrames} (${actualDataSize} bytes / ${expectedSingleFrameSize} bytes per frame)`);
+        if (estimatedFrames > 1) {
+          return estimatedFrames.toString();
+        }
+      }
+    }
+
+    console.log('📊 No multi-frame detected, defaulting to 1 frame');
+    return '1';
+  } catch (error) {
+    console.warn('Error extracting frame count:', error);
+    return '1';
+  }
+}
+
 export function extractDicomMetadata(dataSet) {
   return {
     patientName: dataSet.string('x00100010') || 'Unknown',
@@ -134,7 +213,7 @@ export function extractDicomMetadata(dataSet) {
     bitsStored: dataSet.uint16('x00280101') || 0,
     highBit: dataSet.uint16('x00280102') || 0,
     pixelRepresentation: dataSet.uint16('x00280103') || 0,
-    numberOfFrames: dataSet.string('x00280008') || '1',
+    numberOfFrames: extractFrameCount(dataSet),
     windowCenter: dataSet.string('x00281050') || 'Not specified',
     windowWidth: dataSet.string('x00281051') || 'Not specified',
     rescaleIntercept: dataSet.string('x00281052') || '0',
