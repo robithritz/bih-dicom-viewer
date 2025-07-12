@@ -20,6 +20,8 @@ export default function UploadPage() {
       },
       ...prev.slice(0, 4) // Keep only last 5 uploads
     ]);
+
+    router.replace('/portal');
   };
 
   useEffect(() => {
