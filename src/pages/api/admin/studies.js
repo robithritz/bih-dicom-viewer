@@ -12,8 +12,6 @@ async function handler(req, res) {
   try {
     const { patient } = req.query;
 
-    console.log('Admin loading studies, patient filter:', patient);
-
     // Admin can access all studies or filter by specific patient/folder
     let files;
     if (patient) {
@@ -33,13 +31,11 @@ async function handler(req, res) {
     // get patient detail from db using studies.firstFile substring before first '_'
     try {
       for (const study of Object.values(studies)) {
-        console.log("STUDY", study.firstFile);
         if (study.firstFile) {
           const patientId = study.firstFile.split('_')[0];
           const patient = await prisma.patient.findUnique({
             where: { urn: patientId }
           });
-          console.log("PATIENT", patient);
 
           if (patient) {
             studies[study.studyInstanceUID].uploadedPatientName = `${patient.firstName} ${patient.lastName}`;

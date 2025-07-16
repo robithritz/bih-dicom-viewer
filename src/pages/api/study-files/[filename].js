@@ -16,8 +16,6 @@ async function handler(req, res) {
       return res.status(403).json({ error: validation.error });
     }
 
-    console.log('Getting study files for:', validation.patientFilePath);
-
     // Parse the current file to get its study ID
     const currentFileDataSet = parseDicomFile(validation.patientFilePath);
     const currentStudyUID = currentFileDataSet.string('x0020000d'); // Study Instance UID
@@ -25,8 +23,6 @@ async function handler(req, res) {
     if (!currentStudyUID) {
       return res.status(400).json({ error: 'Could not determine study ID from current file' });
     }
-
-    console.log('Current file study UID:', currentStudyUID);
 
     // Get all files for this patient
     const patientFiles = getDicomFilesByPatientId(validation.patientId);
@@ -71,8 +67,6 @@ async function handler(req, res) {
     let filesWithoutSeries = 0;
     let parseErrors = 0;
 
-    console.log(`🔍 Starting series detection for ${studyFiles.length} files...`);
-
     studyFiles.forEach((file, index) => {
       try {
         // Try to get series number from the file object first
@@ -89,7 +83,6 @@ async function handler(req, res) {
               fileDataSet.uint16('x0020000e') || // Series Instance UID hash
               1; // Default fallback
 
-            console.log(`📄 File ${index + 1}: ${file.name} -> Series ${seriesNum}`);
           } catch (parseError) {
             parseErrors++;
             seriesNum = 999; // Put unparseable files in a separate series
@@ -175,32 +168,15 @@ async function handler(req, res) {
 
     const seriesByUIDArray = Object.values(seriesByUID).sort((a, b) => a.seriesNumber - b.seriesNumber);
 
-    console.log(`🔍 Alternative UID-based detection found ${seriesByUIDArray.length} unique series:`);
-    seriesByUIDArray.forEach((series, index) => {
-      console.log(`   ${index + 1}. Series ${series.seriesNumber} (UID: ${series.seriesInstanceUID.substring(0, 20)}...): ${series.files.length} files - "${series.seriesDescription}"`);
-    });
-
     // Use the method that finds more series
     const seriesArray = seriesByUIDArray.length > Object.values(seriesByNumber).length
       ? seriesByUIDArray
       : Object.values(seriesByNumber).sort((a, b) => a.seriesNumber - b.seriesNumber);
 
-    console.log(`📊 Using ${seriesByUIDArray.length > Object.values(seriesByNumber).length ? 'UID-based' : 'number-based'} grouping (found more series)`);
-
     // Find current series
     const currentFile = studyFiles.find(f => f.name === validation.patientFilePath);
     const currentSeriesNumber = currentFile?.seriesNumber || 1;
     const currentSeriesIndex = seriesArray.findIndex(s => s.seriesNumber === currentSeriesNumber);
-
-    console.log(`📋 PATIENT SERIES ANALYSIS for study ${currentStudyUID}:`);
-    console.log(`   Total files: ${studyFiles.length}`);
-    console.log(`   Series detected: ${seriesArray.length}`);
-
-    console.log('📊 Detailed series breakdown:');
-    seriesArray.forEach((series, index) => {
-      console.log(`   ${index + 1}. Series ${series.seriesNumber}: ${series.files.length} files`);
-      console.log(`      Description: "${series.seriesDescription}"`);
-    });
 
     res.status(200).json({
       files: studyFiles,

@@ -19,11 +19,10 @@ async function handler(req, res) {
   }
 
   try {
-    console.log('Admin serving DICOM file:', filename);
 
     // Parse the filename parameter which might be in format "patientId/filename" or just "filename"
     let patientId, actualFilename, filePath;
-    
+
     if (filename.includes('/')) {
       // Format: "patientId/filename"
       [patientId, actualFilename] = filename.split('/');
@@ -33,8 +32,6 @@ async function handler(req, res) {
       // This is a fallback for legacy URLs
       filePath = path.join(DICOM_DIR, filename);
     }
-
-    console.log('Admin serving DICOM file from path:', filePath);
 
     if (!fs.existsSync(filePath)) {
       console.error('DICOM file not found:', filePath);
@@ -49,7 +46,6 @@ async function handler(req, res) {
 
     // Read and send the file buffer
     const fileBuffer = fs.readFileSync(filePath);
-    console.log('Admin DICOM file size:', fileBuffer.length, 'bytes');
     res.send(fileBuffer);
 
   } catch (error) {

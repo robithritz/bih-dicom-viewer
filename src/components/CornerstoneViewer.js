@@ -251,23 +251,13 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}`;
 
-      console.log('⏳ Loading DICOM image from:', apiPath);
       setLoadingProgress(25);
 
       // Enhanced multi-frame detection
       let frames = parseInt(metadata?.numberOfFrames || '1');
 
-      console.log('📊 DICOM Frame Detection:', {
-        filename: filename,
-        numberOfFrames: metadata?.numberOfFrames,
-        parsedFrames: frames,
-        fileSize: 'Large file - should have many frames if 16MB',
-        allMetadata: metadata
-      });
-
       // For large files that show only 1 frame, try alternative detection
       if (frames === 1) {
-        console.log('⚠️ Only 1 frame detected - trying alternative methods...');
 
         // Try to detect frames from loaded image data
         try {
@@ -280,21 +270,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
             const altFrames2 = testImage.data.uint16('x00280008'); // Number of Frames as uint16
             const altFrames3 = testImage.data.string('x00540081'); // Number of Slices (for some multi-frame)
 
-            console.log('🔍 Alternative frame detection:', {
-              stringFrames: altFrames1,
-              uint16Frames: altFrames2,
-              slicesFrames: altFrames3
-            });
-
             if (altFrames1 && parseInt(altFrames1) > 1) {
               frames = parseInt(altFrames1);
-              console.log(`✅ Found ${frames} frames using string method`);
             } else if (altFrames2 && altFrames2 > 1) {
               frames = altFrames2;
-              console.log(`✅ Found ${frames} frames using uint16 method`);
             } else if (altFrames3 && parseInt(altFrames3) > 1) {
               frames = parseInt(altFrames3);
-              console.log(`✅ Found ${frames} frames using slices method`);
             }
           }
         } catch (error) {
@@ -305,29 +286,19 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       setTotalFrames(frames);
       setLoadingProgress(40);
 
-      if (frames > 1) {
-        console.log(`🎞️ Multi-frame DICOM confirmed: ${frames} frames`);
-      } else {
-        console.log(`⚠️ Still showing 1 frame for large file - this may be incorrect`);
-      }
-
       const finalImageId = frames > 1 ? `${imageId}#frame=${currentFrame}` : imageId;
 
-      console.log('🔄 Decoding DICOM data...');
       setLoadingProgress(60);
 
       const image = await cornerstone.loadImage(finalImageId);
       setLoadingProgress(80);
 
-      console.log('🖼️ Displaying image...');
       cornerstone.displayImage(elementRef.current, image);
 
       // Store viewport for frame changes
       const currentViewport = cornerstone.getViewport(elementRef.current);
       setViewport(currentViewport);
       setLoadingProgress(90);
-
-      console.log('✅ DICOM image loaded and displayed successfully');
 
       // Wait for the image to be fully rendered before activating tools
       // This is critical to prevent the race condition in production
@@ -375,8 +346,6 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                 canvas[`_${eventType}Listener`] = listener;
               }
             });
-
-            console.log('Canvas event handlers configured with comprehensive debugging');
           }
 
           // Activate the current tool (or default to wwwc)
@@ -390,7 +359,6 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
               // Verify the tool is actually active
               const activeTools = cornerstoneTools.store.state.tools;
-              console.log('Active tools after activation:', Object.keys(activeTools));
 
               toolActivated = true;
               break;
@@ -407,7 +375,6 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
           cornerstone.setViewport(elementRef.current, viewport);
 
           if (toolActivated) {
-            console.log(`✅ Tools activated successfully after image load: ${toolToActivate}`);
             setToolsReady(true);
             setLoadingProgress(100);
           } else {
@@ -475,15 +442,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         RectangleRoi: !!cornerstoneTools.RectangleRoiTool
       };
 
-      console.log('Available tools:', availableTools);
-
       // Log current tool state before activation
       const toolState = cornerstoneTools.store.state;
-      console.log('Current tool state before activation:', {
-        tools: Object.keys(toolState.tools || {}),
-        enabledElements: Object.keys(toolState.enabledElements || {}),
-        currentTool: toolName
-      });
 
       // Get the element for tool operations
       const element = elementRef.current;

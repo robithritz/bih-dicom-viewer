@@ -9,7 +9,6 @@ async function handler(req, res) {
   }
 
   try {
-    console.log('Admin getting study files for:', filename);
 
     // Parse the filename parameter which might be in format "folderName/filename" or just "filename"
     let folderName, actualFilename, filePath;
@@ -24,8 +23,6 @@ async function handler(req, res) {
       actualFilename = filename;
     }
 
-    console.log('Parsed filename:', { folderName, actualFilename, filePath });
-
     // Parse the current file to get its study ID
     const currentFileDataSet = parseDicomFile(filePath);
     const currentStudyUID = currentFileDataSet.string('x0020000d'); // Study Instance UID
@@ -33,8 +30,6 @@ async function handler(req, res) {
     if (!currentStudyUID) {
       return res.status(400).json({ error: 'Could not determine study ID from current file' });
     }
-
-    console.log('Current file study UID:', currentStudyUID);
 
     // Get all files (admin can access all files)
     let allFiles;
@@ -94,26 +89,6 @@ async function handler(req, res) {
     let filesWithoutSeries = 0;
     let parseErrors = 0;
 
-    console.log(`🔍 Starting series detection for ${studyFiles.length} files...`);
-
-    // Debug: Examine first 10 files in detail
-    console.log(`🧪 DEBUGGING: Examining first 10 files in detail...`);
-    studyFiles.slice(0, 10).forEach((file, index) => {
-      try {
-        const fileDataSet = parseDicomFile(file.name);
-        const seriesNum = fileDataSet.uint16('x00200011') || parseInt(fileDataSet.string('x00200011')) || 'MISSING';
-        const seriesUID = fileDataSet.string('x0020000e') || 'MISSING';
-        const seriesDesc = fileDataSet.string('x0008103e') || 'MISSING';
-
-        console.log(`   File ${index + 1}: ${file.name}`);
-        console.log(`      Series Number: ${seriesNum}`);
-        console.log(`      Series UID: ${seriesUID}`);
-        console.log(`      Series Description: ${seriesDesc}`);
-      } catch (error) {
-        console.log(`   File ${index + 1}: ${file.name} - PARSE ERROR: ${error.message}`);
-      }
-    });
-
     studyFiles.forEach((file, index) => {
       try {
         // Try to get series number from the file object first
@@ -130,7 +105,6 @@ async function handler(req, res) {
               fileDataSet.uint16('x0020000e') || // Series Instance UID hash
               1; // Default fallback
 
-            console.log(`📄 File ${index + 1}: ${file.name} -> Series ${seriesNum}`);
           } catch (parseError) {
             parseErrors++;
             seriesNum = 999; // Put unparseable files in a separate series
@@ -196,7 +170,6 @@ async function handler(req, res) {
     });
 
     // Quick scan of ALL files to find unique series numbers and UIDs
-    console.log(`🔍 COMPREHENSIVE SCAN: Checking all ${studyFiles.length} files for unique series...`);
     const allSeriesNumbers = new Set();
     const allSeriesUIDs = new Set();
     const seriesNumberToUID = {};
@@ -219,35 +192,9 @@ async function handler(req, res) {
           }
         }
 
-        // Log every 100th file for progress
-        if (index % 100 === 0) {
-          console.log(`   Scanned ${index + 1}/${studyFiles.length} files...`);
-        }
       } catch (error) {
         scanParseErrors++;
       }
-    });
-
-    console.log(`📊 COMPREHENSIVE SCAN RESULTS:`);
-    console.log(`   Unique Series Numbers found: ${allSeriesNumbers.size} -> [${Array.from(allSeriesNumbers).sort((a, b) => a - b).join(', ')}]`);
-    console.log(`   Unique Series UIDs found: ${allSeriesUIDs.size}`);
-    console.log(`   Parse errors during scan: ${scanParseErrors}`);
-
-    console.log(`📊 Series Number to UID mapping:`);
-    Object.keys(seriesNumberToUID).sort((a, b) => parseInt(a) - parseInt(b)).forEach(seriesNum => {
-      const uids = Array.from(seriesNumberToUID[seriesNum]);
-      console.log(`   Series ${seriesNum}: ${uids.length} unique UID(s)`);
-      uids.forEach((uid, index) => {
-        console.log(`      ${index + 1}. ${uid}`);
-      });
-    });
-
-    console.log(`📊 Original series detection summary:`, {
-      totalFiles: studyFiles.length,
-      seriesDetected: Object.keys(seriesByNumber).length,
-      filesWithoutSeries,
-      parseErrors,
-      seriesNumbers: Object.keys(seriesByNumber).sort((a, b) => parseInt(a) - parseInt(b))
     });
 
     // Alternative grouping by Series Instance UID to catch missed series
@@ -277,17 +224,10 @@ async function handler(req, res) {
 
     const seriesByUIDArray = Object.values(seriesByUID).sort((a, b) => a.seriesNumber - b.seriesNumber);
 
-    console.log(`🔍 Alternative UID-based detection found ${seriesByUIDArray.length} unique series:`);
-    seriesByUIDArray.forEach((series, index) => {
-      console.log(`   ${index + 1}. Series ${series.seriesNumber} (UID: ${series.seriesInstanceUID.substring(0, 20)}...): ${series.files.length} files - "${series.seriesDescription}"`);
-    });
-
     // Use the method that finds more series
     const seriesArray = seriesByUIDArray.length > Object.values(seriesByNumber).length
       ? seriesByUIDArray
       : Object.values(seriesByNumber).sort((a, b) => a.seriesNumber - b.seriesNumber);
-
-    console.log(`📊 Using ${seriesByUIDArray.length > Object.values(seriesByNumber).length ? 'UID-based' : 'number-based'} grouping (found more series)`);
 
     // Convert to array and sort by series number
     // const seriesArray = Object.values(seriesByNumber).sort((a, b) => a.seriesNumber - b.seriesNumber);
@@ -297,22 +237,10 @@ async function handler(req, res) {
     const currentSeriesNumber = currentFile?.seriesNumber || 1;
     const currentSeriesIndex = seriesArray.findIndex(s => s.seriesNumber === currentSeriesNumber);
 
-    console.log(`📋 FINAL SERIES ANALYSIS for study ${currentStudyUID}:`);
-    console.log(`   Total files: ${studyFiles.length}`);
-    console.log(`   Series detected: ${seriesArray.length}`);
-    console.log(`   Expected series: 8 (you mentioned)`);
 
     if (seriesArray.length !== 8) {
       console.warn(`⚠️ SERIES COUNT MISMATCH: Expected 8 series, found ${seriesArray.length}`);
     }
-
-    console.log('📊 Detailed series breakdown:');
-    seriesArray.forEach((series, index) => {
-      console.log(`   ${index + 1}. Series ${series.seriesNumber}: ${series.files.length} files`);
-      console.log(`      Description: "${series.seriesDescription}"`);
-      console.log(`      UID: ${series.seriesInstanceUID || 'N/A'}`);
-      console.log(`      Sample files: ${series.files.slice(0, 3).map(f => f.name).join(', ')}${series.files.length > 3 ? '...' : ''}`);
-    });
 
     // Log any potential issues
     if (filesWithoutSeries > 0) {
