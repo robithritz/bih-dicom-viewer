@@ -24,7 +24,7 @@ export default function ViewerPage() {
         const [patientIdFromPath] = filename.split('/');
 
         // Redirect to home if patient ID doesn't match logged-in user
-        if (patientIdFromPath !== user.urn || (user.role && !user.role != "superadmin")) {
+        if (patientIdFromPath.split('_')?.[0] !== user.urn || (user.role && !user.role != "superadmin")) {
           console.warn('Patient ID mismatch:', patientIdFromPath, 'vs', user.urn);
           router.replace('/');
           return;
@@ -112,6 +112,7 @@ export default function ViewerPage() {
           top: 10px;
           right: 10px;
           z-index: 1000;
+          margin-left: 350px; /* Account for sidebar */
         }
 
         .back-button a {

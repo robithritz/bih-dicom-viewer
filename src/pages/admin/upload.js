@@ -20,6 +20,8 @@ export default function UploadPage() {
       },
       ...prev.slice(0, 4) // Keep only last 5 uploads
     ]);
+
+    router.replace('/portal');
   };
 
   useEffect(() => {
@@ -121,11 +123,14 @@ export default function UploadPage() {
       <div className="upload-instructions">
         <h2>Instructions</h2>
         <ol>
-          <li>Name your ZIP file using format: <code>{'{patient_id}_{episode_id}.zip'}</code></li>
+          <li>Name your ZIP file using format: <code>{'{URN}_{episode_id}.zip'}</code></li>
+        </ol>
+        <h2 style={{ marginTop: '28px' }}>Information</h2>
+        <ol>
           <li>ZIP file should contain DICOM files (.dcm or .dicom)</li>
           <li>Drag and drop the ZIP file or click to select</li>
           <li>Patient ID will be automatically parsed from filename</li>
-          <li>DICOM files will be extracted to DICOM/[patient_id]/ folder</li>
+          <li>DICOM files will be extracted to DICOM/[URN]/ folder</li>
           <li>Non-DICOM files in the ZIP will be ignored</li>
           <li>Duplicate filenames will be automatically renamed</li>
         </ol>

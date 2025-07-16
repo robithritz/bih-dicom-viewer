@@ -48,11 +48,17 @@ export default function ZipUpload({ onUploadComplete }) {
     }
   };
 
+  const getFolderNameFromFilename = (filename) => {
+    // Use the full filename without extension as the folder name
+    // So 000012_0001.zip becomes 000012_0001
+    return filename.replace('.zip', '');
+  };
+
   const parsePatientIdFromFilename = (filename) => {
     // Extract patient ID from filename format: {patient_id}_{episode_id}.zip
     const nameWithoutExt = filename.replace('.zip', '');
     const parts = nameWithoutExt.split('_');
-    
+
     if (parts.length >= 2) {
       // Return patient_id (first part before underscore)
       return parts[0];
@@ -63,28 +69,31 @@ export default function ZipUpload({ onUploadComplete }) {
   };
 
   const handleUpload = async (zipFile) => {
-    // Parse patient ID from filename
+    // Get folder name from filename (full name without extension)
+    const folderName = getFolderNameFromFilename(zipFile.name);
+
+    // Also parse patient ID for validation (first part before underscore)
     const patientId = parsePatientIdFromFilename(zipFile.name);
-    
-    if (!patientId) {
-      alert('Could not parse patient ID from filename. Please use format: {patient_id}_{episode_id}.zip');
+
+    if (!folderName) {
+      alert('Could not parse folder name from filename.');
       return;
     }
 
-    if (!/^[a-zA-Z0-9_-]+$/.test(patientId)) {
-      alert(`Invalid patient ID "${patientId}". Patient ID can only contain letters, numbers, hyphens, and underscores`);
+    if (!/^[a-zA-Z0-9_-]+$/.test(folderName)) {
+      alert(`Invalid folder name "${folderName}". Folder name can only contain letters, numbers, hyphens, and underscores`);
       return;
     }
 
     setIsUploading(true);
-    setUploadProgress({ filename: zipFile.name, size: zipFile.size, patientId });
+    setUploadProgress({ filename: zipFile.name, size: zipFile.size, folderName, patientId });
     setChunkProgress(null);
     setExtractionProgress(null);
 
     try {
-      console.log(`Starting ZIP upload: ${zipFile.name} (${(zipFile.size / 1024 / 1024).toFixed(2)} MB) for patient ${patientId}`);
+      console.log(`Starting ZIP upload: ${zipFile.name} (${(zipFile.size / 1024 / 1024).toFixed(2)} MB) to folder ${folderName}`);
 
-      const result = await uploadZipFileChunked(zipFile, patientId, (progress) => {
+      const result = await uploadZipFileChunked(zipFile, folderName, (progress) => {
         if (progress.type === 'chunk') {
           // Update chunk progress
           setChunkProgress({
@@ -109,6 +118,7 @@ export default function ZipUpload({ onUploadComplete }) {
       // Final progress update
       setUploadProgress({
         filename: zipFile.name,
+        folderName,
         patientId,
         completed: true,
         success: result.success,
@@ -120,7 +130,7 @@ export default function ZipUpload({ onUploadComplete }) {
 
       // Show results
       if (result.success) {
-        alert(`Successfully processed ${zipFile.name}!\n\nExtracted ${result.dicomFilesExtracted} DICOM files to patient folder: ${patientId}\nTotal files in ZIP: ${result.totalFilesInZip}`);
+        alert(`Successfully processed ${zipFile.name}!\n\nExtracted ${result.dicomFilesExtracted} DICOM files to folder: DICOM/${folderName}\nTotal files in ZIP: ${result.totalFilesInZip}`);
       } else {
         alert(`Upload failed: ${result.error}`);
       }
@@ -133,6 +143,7 @@ export default function ZipUpload({ onUploadComplete }) {
       // Notify parent component
       if (onUploadComplete) {
         onUploadComplete({
+          folderName,
           patientId,
           successCount: result.dicomFilesExtracted,
           totalFiles: result.totalFilesInZip,
@@ -179,7 +190,8 @@ export default function ZipUpload({ onUploadComplete }) {
               {uploadProgress && (
                 <div className="progress-details">
                   <p>📦 {uploadProgress.filename}</p>
-                  <p>👤 Patient ID: {uploadProgress.patientId}</p>
+                  <p>� Target Folder: DICOM/{uploadProgress.folderName}</p>
+                  <p>�👤 Patient ID: {uploadProgress.patientId}</p>
                   <p>📊 Size: {(uploadProgress.size / 1024 / 1024).toFixed(2)} MB</p>
                 </div>
               )}
@@ -212,7 +224,7 @@ export default function ZipUpload({ onUploadComplete }) {
               <div className="upload-icon">📦</div>
               <h3>Drop ZIP file here</h3>
               <p>or click to select ZIP file</p>
-              <small>Format: {'{patient_id}_{episode_id}.zip'}</small>
+              <small>Format: {'{URN}_{episode_id}.zip'}</small>
               <small>Contains DICOM files (.dcm)</small>
             </div>
           )}
@@ -221,9 +233,10 @@ export default function ZipUpload({ onUploadComplete }) {
         {uploadProgress && !isUploading && (
           <div className="upload-results">
             <p>✅ ZIP processing completed!</p>
-            <p>Patient ID: {uploadProgress.patientId}</p>
-            <p>DICOM files extracted: {uploadProgress.dicomFilesExtracted}</p>
-            <p>Total files in ZIP: {uploadProgress.totalFilesInZip}</p>
+            <p>📁 Target Folder: DICOM/{uploadProgress.folderName}</p>
+            <p>👤 Patient ID: {uploadProgress.patientId}</p>
+            <p>📄 DICOM files extracted: {uploadProgress.dicomFilesExtracted}</p>
+            <p>📦 Total files in ZIP: {uploadProgress.totalFilesInZip}</p>
           </div>
         )}
       </div>

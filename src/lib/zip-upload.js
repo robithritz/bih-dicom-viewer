@@ -62,19 +62,19 @@ export function createFileChunks(file, chunkSize = ZIP_CHUNK_CONFIG.CHUNK_SIZE) 
  * Upload a single chunk with retry logic
  * @param {Object} chunkData - Chunk data object
  * @param {string} sessionId - Upload session ID
- * @param {string} patientId - Patient ID
+ * @param {string} folderName - Folder name (full zip name without extension)
  * @param {string} filename - Original filename
  * @param {string} fileHash - File hash for integrity
  * @param {number} totalChunks - Total number of chunks
  * @returns {Promise<Object>} - Upload result
  */
-async function uploadChunk(chunkData, sessionId, patientId, filename, fileHash, totalChunks) {
+async function uploadChunk(chunkData, sessionId, folderName, filename, fileHash, totalChunks) {
   const formData = new FormData();
   formData.append('chunk', chunkData.chunk);
   formData.append('chunkIndex', chunkData.index.toString());
   formData.append('totalChunks', totalChunks.toString());
   formData.append('sessionId', sessionId);
-  formData.append('patientId', patientId);
+  formData.append('patientId', folderName); // Using folderName as patientId for backward compatibility
   formData.append('filename', filename);
   formData.append('fileHash', fileHash);
   formData.append('chunkStart', chunkData.start.toString());
@@ -120,11 +120,11 @@ async function uploadChunk(chunkData, sessionId, patientId, filename, fileHash, 
 /**
  * Upload ZIP file using chunked upload
  * @param {File} zipFile - ZIP file to upload
- * @param {string} patientId - Patient ID parsed from filename
+ * @param {string} folderName - Folder name (full zip name without extension)
  * @param {Function} progressCallback - Progress callback function
  * @returns {Promise<Object>} - Upload result
  */
-export async function uploadZipFileChunked(zipFile, patientId, progressCallback) {
+export async function uploadZipFileChunked(zipFile, folderName, progressCallback) {
   try {
     // Generate session ID
     const sessionId = `zip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -152,7 +152,7 @@ export async function uploadZipFileChunked(zipFile, patientId, progressCallback)
         percentage: Math.round(((i + 1) / totalChunks) * 90) // Reserve 10% for extraction
       });
 
-      await uploadChunk(chunk, sessionId, patientId, zipFile.name, fileHash, totalChunks);
+      await uploadChunk(chunk, sessionId, folderName, zipFile.name, fileHash, totalChunks);
     }
 
     // Finalize upload and trigger extraction
@@ -173,7 +173,7 @@ export async function uploadZipFileChunked(zipFile, patientId, progressCallback)
       headers,
       body: JSON.stringify({
         sessionId,
-        patientId,
+        patientId: folderName, // Using folderName as patientId parameter for backward compatibility
         filename: zipFile.name,
         fileHash,
         totalChunks

@@ -1,4 +1,4 @@
-import { getDicomFiles, DICOM_DIR } from '../../lib/dicom';
+import { getDicomFilesByPatientId, DICOM_DIR } from '../../lib/dicom';
 import { requireAuth } from '../../lib/auth-middleware';
 import path from 'path';
 
@@ -14,7 +14,7 @@ async function handler(req, res) {
 
     console.log('Loading files for authenticated patient:', patientId);
 
-    const files = getDicomFiles(urn).map(file => ({
+    const files = getDicomFilesByPatientId(urn).map(file => ({
       name: file,
       path: path.join(DICOM_DIR, file),
       patientId: patientId

@@ -82,10 +82,14 @@ export const requireAuth = (handler) => {
  * @returns {boolean} - Whether patient has access to the file
  */
 export const hasFileAccess = (patientId, filename) => {
-  // If filename already includes patient folder path (e.g., "00234/file.dcm")
+  // If filename already includes folder path (e.g., "000012_0001/file.dcm")
   if (filename.includes('/')) {
-    const [filePatientId] = filename.split('/');
-    return filePatientId === patientId;
+    const [folderName] = filename.split('/');
+
+    // Extract patient ID from folder name (handle both old and new formats)
+    const folderPatientId = folderName.split('_')[0]; // Get patient ID part before underscore
+
+    return folderPatientId === patientId;
   }
 
   // For backward compatibility, assume direct access if no folder structure
@@ -97,15 +101,17 @@ export const hasFileAccess = (patientId, filename) => {
  * Get the correct file path for a patient's DICOM file
  * @param {string} patientId - Patient ID from session
  * @param {string} filename - Filename being requested
- * @returns {string} - Correct file path with patient folder
+ * @returns {string} - Correct file path with folder
  */
 export const getPatientFilePath = (patientId, filename) => {
-  // If filename already includes patient folder path, use as-is
+  // If filename already includes folder path, use as-is
   if (filename.includes('/')) {
     return filename;
   }
 
-  // Otherwise, prepend patient ID folder
+  // For new uploads, we need to find the correct folder for this patient
+  // This is a fallback - ideally filenames should always include the folder path
+  // For now, assume the folder name is the same as patient ID (backward compatibility)
   return `${patientId}/${filename}`;
 };
 
@@ -125,14 +131,17 @@ export const validatePatientFileAccess = (req, filename) => {
     };
   }
 
-  // Parse the filename parameter which might be in format "patientId/filename" or just "filename"
-  let patientIdFromPath, actualFilename;
+  // Parse the filename parameter which might be in format "folderName/filename" or just "filename"
+  let folderNameFromPath, actualFilename, patientIdFromPath;
 
   if (filename.includes('/')) {
-    // Format: "patientId/filename"
-    [patientIdFromPath, actualFilename] = filename.split('/');
+    // Format: "folderName/filename" (e.g., "000012_0001/file.dcm")
+    [folderNameFromPath, actualFilename] = filename.split('/');
 
-    // Validate that the patient ID in path matches authenticated patient
+    // Extract patient ID from folder name (handle both old and new formats)
+    patientIdFromPath = folderNameFromPath.split('_')[0]; // Get patient ID part before underscore
+
+    // Validate that the patient ID from folder matches authenticated patient
     if (patientIdFromPath !== patient.urn) {
       return {
         isValid: false,
@@ -143,10 +152,11 @@ export const validatePatientFileAccess = (req, filename) => {
     // Format: just "filename" - use authenticated patient ID
     actualFilename = filename;
     patientIdFromPath = patient.urn;
+    folderNameFromPath = patient.urn; // Fallback to patient ID as folder name
   }
 
   // Get the correct file path for this patient
-  const patientFilePath = getPatientFilePath(patientIdFromPath, actualFilename);
+  const patientFilePath = folderNameFromPath ? `${folderNameFromPath}/${actualFilename}` : getPatientFilePath(patientIdFromPath, actualFilename);
 
   // Check if patient has access to this file
   if (!hasFileAccess(patientIdFromPath, patientFilePath)) {
@@ -160,7 +170,8 @@ export const validatePatientFileAccess = (req, filename) => {
     isValid: true,
     patientFilePath,
     actualFilename,
-    patientId: patientIdFromPath
+    patientId: patientIdFromPath,
+    folderName: folderNameFromPath
   };
 };
 

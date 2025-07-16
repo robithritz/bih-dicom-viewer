@@ -40,14 +40,6 @@ export const AuthProvider = ({ children }) => {
       const adminToken = localStorage.getItem('admin-auth-token');
       const patientToken = localStorage.getItem('auth-token');
 
-      console.log("masuk checkauth ", {
-        adminToken: !!adminToken,
-        patientToken: !!patientToken,
-        pathname: router.pathname,
-        isReady: router.isReady,
-        retryCount
-      });
-
       const pathname = router.pathname;
 
       if (adminToken && (pathname.includes('/portal') || pathname.includes('/admin/') || pathname.includes('/upload'))) {
@@ -62,9 +54,7 @@ export const AuthProvider = ({ children }) => {
           if (response.ok) {
             const data = await response.json();
             setUser(data.user);
-            console.log("Admin auth successful:", data.user);
           } else {
-            console.log("Admin auth failed, removing token");
             // Invalid token, remove it
             localStorage.removeItem('admin-auth-token');
             setUser(null);
@@ -73,7 +63,6 @@ export const AuthProvider = ({ children }) => {
           console.error('Admin auth API call failed:', fetchError);
           // If it's a network error and we haven't retried too many times, retry
           if (retryCount < 2) {
-            console.log(`Retrying admin auth check (attempt ${retryCount + 1})`);
             // Don't set loading/initialized state here, let the retry handle it
             setTimeout(() => checkAuth(retryCount + 1), 1000);
             return; // Early return prevents finally block from running
@@ -94,9 +83,7 @@ export const AuthProvider = ({ children }) => {
           if (response.ok) {
             const data = await response.json();
             setUser(data.patient);
-            console.log("Patient auth successful:", data.patient);
           } else {
-            console.log("Patient auth failed, removing token");
             // Invalid token, remove it
             localStorage.removeItem('auth-token');
             setUser(null);
@@ -105,7 +92,6 @@ export const AuthProvider = ({ children }) => {
           console.error('Patient auth API call failed:', fetchError);
           // If it's a network error and we haven't retried too many times, retry
           if (retryCount < 2) {
-            console.log(`Retrying patient auth check (attempt ${retryCount + 1})`);
             // Don't set loading/initialized state here, let the retry handle it
             setTimeout(() => checkAuth(retryCount + 1), 1000);
             return; // Early return prevents finally block from running

@@ -87,10 +87,11 @@ export default function AdminViewerPage() {
           position: 'absolute',
           top: '10px',
           right: '10px',
-          zIndex: 1000
+          zIndex: 1000,
+          marginLeft: '350px' // Account for sidebar
         }}>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.replace('/portal')}
             className="btn btn-primary"
           >
             ← Back to Portal
