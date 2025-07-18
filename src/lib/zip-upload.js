@@ -2,9 +2,12 @@
  * Configuration for ZIP chunked uploads
  */
 export const ZIP_CHUNK_CONFIG = {
-  CHUNK_SIZE: 2 * 1024 * 1024, // 2MB per chunk
+  CHUNK_SIZE: 5 * 1024 * 1024, // 5MB per chunk
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000, // 1 second
+  CHUNK_DELAY: 1000, // 1s delay between chunks to avoid WAF
+  WAF_SAFE_MODE: true, // Enable WAF-friendly upload mode
+  MAX_SINGLE_UPLOAD_SIZE: 25 * 1024 * 1024, // 50MB - use single upload for files smaller than this
 };
 
 /**
@@ -108,13 +111,71 @@ async function uploadChunk(chunkData, sessionId, folderName, filename, fileHash,
       console.warn(`Chunk ${chunkData.index} upload attempt ${attempt + 1} failed:`, error.message);
 
       if (attempt < ZIP_CHUNK_CONFIG.MAX_RETRIES - 1) {
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, ZIP_CHUNK_CONFIG.RETRY_DELAY * (attempt + 1)));
+        // Check if it's a WAF-related error (403, 429, or specific error messages)
+        const isWAFError = error.message.includes('403') ||
+          error.message.includes('429') ||
+          error.message.includes('blocked') ||
+          error.message.includes('rate limit');
+
+        // Use exponential backoff for WAF errors, regular delay for others
+        const retryDelay = isWAFError
+          ? ZIP_CHUNK_CONFIG.RETRY_DELAY * Math.pow(2, attempt + 1) // Exponential backoff
+          : ZIP_CHUNK_CONFIG.RETRY_DELAY * (attempt + 1); // Linear backoff
+
+        console.log(`⏳ ${isWAFError ? 'WAF-detected' : 'Network'} error, waiting ${retryDelay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
   }
 
   throw new Error(`Failed to upload chunk ${chunkData.index} after ${ZIP_CHUNK_CONFIG.MAX_RETRIES} attempts: ${lastError.message}`);
+}
+
+/**
+ * Upload ZIP file using single request (for smaller files to avoid WAF)
+ * @param {File} zipFile - ZIP file to upload
+ * @param {string} folderName - Folder name (full zip name without extension)
+ * @param {Function} progressCallback - Progress callback function
+ * @returns {Promise<Object>} - Upload result
+ */
+async function uploadZipFileSingle(zipFile, folderName, progressCallback) {
+  try {
+    progressCallback({ type: 'chunk', stage: 'Preparing single upload...', percentage: 10 });
+
+    const formData = new FormData();
+    formData.append('zipFile', zipFile);
+    formData.append('folderName', folderName);
+
+    const token = localStorage.getItem('admin-auth-token');
+    const headers = {
+      'Authorization': `Bearer ${token}`
+    };
+
+    progressCallback({ type: 'chunk', stage: 'Uploading file...', percentage: 30 });
+
+    const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/upload-zip-single', {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    progressCallback({ type: 'chunk', stage: 'Processing...', percentage: 90 });
+
+    const result = await response.json();
+
+    progressCallback({ type: 'chunk', stage: 'Complete', percentage: 100 });
+
+    return result;
+
+  } catch (error) {
+    console.error('Single upload failed:', error);
+    throw error;
+  }
 }
 
 /**
@@ -126,6 +187,14 @@ async function uploadChunk(chunkData, sessionId, folderName, filename, fileHash,
  */
 export async function uploadZipFileChunked(zipFile, folderName, progressCallback) {
   try {
+    // Check if file is small enough for single upload (WAF-friendly)
+    if (zipFile.size <= ZIP_CHUNK_CONFIG.MAX_SINGLE_UPLOAD_SIZE) {
+      console.log(`📦 File size ${(zipFile.size / 1024 / 1024).toFixed(2)}MB ≤ ${ZIP_CHUNK_CONFIG.MAX_SINGLE_UPLOAD_SIZE / 1024 / 1024}MB, using single upload to avoid WAF`);
+      return await uploadZipFileSingle(zipFile, folderName, progressCallback);
+    }
+
+    console.log(`📦 File size ${(zipFile.size / 1024 / 1024).toFixed(2)}MB > ${ZIP_CHUNK_CONFIG.MAX_SINGLE_UPLOAD_SIZE / 1024 / 1024}MB, using chunked upload with WAF-safe delays`);
+
     // Generate session ID
     const sessionId = `zip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -140,7 +209,7 @@ export async function uploadZipFileChunked(zipFile, folderName, progressCallback
 
     console.log(`Uploading ZIP file in ${totalChunks} chunks of ${ZIP_CHUNK_CONFIG.CHUNK_SIZE / 1024 / 1024}MB each`);
 
-    // Upload chunks sequentially
+    // Upload chunks sequentially with WAF-friendly delays
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
 
@@ -153,6 +222,12 @@ export async function uploadZipFileChunked(zipFile, folderName, progressCallback
       });
 
       await uploadChunk(chunk, sessionId, folderName, zipFile.name, fileHash, totalChunks);
+
+      // Add delay between chunks to avoid WAF blocking (except for last chunk)
+      if (ZIP_CHUNK_CONFIG.WAF_SAFE_MODE && i < chunks.length - 1) {
+        console.log(`⏳ WAF-safe delay: ${ZIP_CHUNK_CONFIG.CHUNK_DELAY}ms before next chunk`);
+        await new Promise(resolve => setTimeout(resolve, ZIP_CHUNK_CONFIG.CHUNK_DELAY));
+      }
     }
 
     // Finalize upload and trigger extraction
