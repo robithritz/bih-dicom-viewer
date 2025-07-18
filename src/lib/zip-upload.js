@@ -2,7 +2,7 @@
  * Configuration for ZIP chunked uploads
  */
 export const ZIP_CHUNK_CONFIG = {
-  CHUNK_SIZE: 5 * 1024 * 1024, // 5MB per chunk
+  CHUNK_SIZE: 2 * 1024 * 1024, // 2MB per chunk
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000, // 1 second
 };
