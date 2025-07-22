@@ -54,14 +54,23 @@ export const createOTPSession = (email) => {
   try {
     const otps = loadOTPs();
     const now = Date.now();
-    
+
     // Check if there's an existing session for this email
     const existingSession = otps[email];
-    
-    // Check retry limit and cooldown
+
+    // Check retry limit, cooldown, and existing valid OTP
     if (existingSession) {
       const timeSinceLastRequest = now - existingSession.lastRequestTime;
-      
+
+      // Check if current OTP is still valid (not expired)
+      if (existingSession.expiresAt > now) {
+        const remainingTime = Math.ceil((existingSession.expiresAt - now) / 1000);
+        const minutes = Math.floor(remainingTime / 60);
+        const seconds = remainingTime % 60;
+        const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        throw new Error(`Current verification code is still valid. Please wait ${timeString} before requesting a new code.`);
+      }
+
       // If within retry cooldown period, check retry count
       if (timeSinceLastRequest < OTP_RETRY_TIME * 1000) {
         if (existingSession.retryCount >= OTP_MAX_RETRY) {
@@ -72,11 +81,11 @@ export const createOTPSession = (email) => {
         existingSession.retryCount = 0;
       }
     }
-    
+
     // Generate new OTP
     const otp = generateOTP();
     const sessionId = crypto.randomUUID();
-    
+
     // Create or update OTP session
     otps[email] = {
       sessionId,
@@ -89,10 +98,10 @@ export const createOTPSession = (email) => {
       lastRequestTime: now,
       attempts: 0
     };
-    
+
     // Clean up expired OTPs
     cleanupExpiredOTPs(otps);
-    
+
     // Save to file
     if (saveOTPs(otps)) {
       return {
@@ -114,52 +123,52 @@ export const verifyOTP = (email, otp, sessionId) => {
   try {
     const otps = loadOTPs();
     const session = otps[email];
-    
+
     if (!session) {
       throw new Error('No OTP session found for this email');
     }
-    
+
     if (session.sessionId !== sessionId) {
       throw new Error('Invalid session');
     }
-    
+
     if (session.verified) {
       throw new Error('OTP already used');
     }
-    
+
     if (Date.now() > session.expiresAt) {
       throw new Error('OTP has expired');
     }
-    
+
     // Increment attempt counter
     session.attempts += 1;
-    
+
     // Check for too many attempts
     if (session.attempts > 3) {
       delete otps[email];
       saveOTPs(otps);
       throw new Error('Too many verification attempts. Please request a new OTP.');
     }
-    
+
     if (session.otp !== otp) {
       saveOTPs(otps);
       throw new Error('Invalid OTP');
     }
-    
+
     // Mark as verified
     session.verified = true;
     session.verifiedAt = Date.now();
-    
+
     // Save updated session
     saveOTPs(otps);
-    
+
     return {
       success: true,
       email: session.email,
       sessionId: session.sessionId,
       verifiedAt: session.verifiedAt
     };
-    
+
   } catch (error) {
     throw error;
   }
@@ -171,25 +180,25 @@ export const cleanupExpiredOTPs = (otps = null) => {
     if (!otps) {
       otps = loadOTPs();
     }
-    
+
     const now = Date.now();
     let cleaned = false;
-    
+
     Object.keys(otps).forEach(email => {
       const session = otps[email];
-      
+
       // Remove expired sessions or verified sessions older than 1 hour
-      if (now > session.expiresAt || 
-          (session.verified && now > session.verifiedAt + 3600000)) {
+      if (now > session.expiresAt ||
+        (session.verified && now > session.verifiedAt + 3600000)) {
         delete otps[email];
         cleaned = true;
       }
     });
-    
+
     if (cleaned) {
       saveOTPs(otps);
     }
-    
+
     return cleaned;
   } catch (error) {
     console.error('Error cleaning up expired OTPs:', error);
@@ -202,11 +211,11 @@ export const getOTPSession = (email) => {
   try {
     const otps = loadOTPs();
     const session = otps[email];
-    
+
     if (!session) {
       return null;
     }
-    
+
     return {
       sessionId: session.sessionId,
       email: session.email,
@@ -227,12 +236,12 @@ export const getOTPSession = (email) => {
 export const deleteOTPSession = (email) => {
   try {
     const otps = loadOTPs();
-    
+
     if (otps[email]) {
       delete otps[email];
       return saveOTPs(otps);
     }
-    
+
     return true;
   } catch (error) {
     console.error('Error deleting OTP session:', error);

@@ -15,6 +15,11 @@ export default function AdminPortal() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
 
+  // Search and pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [studiesPerPage] = useState(10); // Number of studies per page
+
   // Check for patient parameter in URL
   useEffect(() => {
     if (router.query.patient) {
@@ -30,9 +35,9 @@ export default function AdminPortal() {
   }, [selectedPatient, isAuthenticated]);
 
   // Set loading state based on AuthContext
-  useEffect(() => {
-    setLoading(authContextLoading);
-  }, [authContextLoading]);
+  // useEffect(() => {
+  //   // setLoading(authContextLoading);
+  // }, [authContextLoading]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -138,18 +143,113 @@ export default function AdminPortal() {
     }
   };
 
-  // Filter studies based on selected patient (admin can see all)
-  const filteredStudies = selectedPatient
-    ? Object.fromEntries(
-      Object.entries(studies).filter(([_, study]) => study.patientID === selectedPatient)
-    )
-    : studies;
+  // Search and filter studies
+  const searchAndFilterStudies = () => {
+    let filtered = Object.entries(studies);
+
+    // Filter by selected patient if any
+    if (selectedPatient) {
+      filtered = filtered.filter(([_, study]) => study.patientID === selectedPatient);
+    }
+
+    // Search filter by patient name, URN (patientID), uploaded patient info, or episode (from folder name)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(([_, study]) => {
+        // Search in patient name (both original and uploaded)
+        const patientName = (study.patientName || '').toLowerCase();
+        const uploadedPatientName = (study.uploadedPatientName || '').toLowerCase();
+
+        // Search in URN/Patient ID (both original and uploaded)
+        const patientId = (study.patientID || '').toLowerCase();
+        const uploadedPatientId = (study.uploadedPatientId || '').toLowerCase();
+
+        // Search in episode (extract from folder name or firstFile path)
+        const firstFile = study.firstFile || '';
+        const folderName = firstFile.includes('/') ? firstFile.split('/')[0] : '';
+        const episode = folderName.includes('_') ? folderName.split('_').slice(1).join('_') : '';
+
+        // Search in study description
+        const studyDescription = (study.studyDescription || '').toLowerCase();
+
+        return patientName.includes(query) ||
+          uploadedPatientName.includes(query) ||
+          patientId.includes(query) ||
+          uploadedPatientId.includes(query) ||
+          episode.toLowerCase().includes(query) ||
+          studyDescription.includes(query);
+      });
+    }
+
+    return Object.fromEntries(filtered);
+  };
+
+  const filteredStudies = searchAndFilterStudies();
+
+  // Pagination logic
+  const totalStudies = Object.keys(filteredStudies).length;
+  const totalPages = Math.ceil(totalStudies / studiesPerPage);
+  const startIndex = (currentPage - 1) * studiesPerPage;
+  const endIndex = startIndex + studiesPerPage;
+
+  const paginatedStudies = Object.fromEntries(
+    Object.entries(filteredStudies).slice(startIndex, endIndex)
+  );
+
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedPatient]);
 
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-lg">Loading...</div>
+        <div className="min-h-screen bg-gray-50">
+          <div className="max-w-7xl">
+            <div className="header">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    <Image src={`${router.basePath}/images/ihc-white.png`} alt="Logo" width={200} height={80} />
+                    DICOM Viewer - Admin Portal
+                  </h1>
+                  <p className="text-white">Medical Image Viewer and Management System</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Loading indicator */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading DICOM Studies</h2>
+              <p className="text-gray-600">Please wait while we fetch your studies...</p>
+            </div>
+
+            {/* Loading skeleton cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
+                  {/* Skeleton thumbnail */}
+                  <div className="h-32 bg-gray-200"></div>
+
+                  {/* Skeleton content */}
+                  <div className="p-6">
+                    <div className="space-y-3">
+                      <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                      <div className="h-3 bg-gray-200 rounded w-2/5"></div>
+                    </div>
+                    <div className="mt-4 h-8 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Layout>
     );
@@ -253,9 +353,30 @@ export default function AdminPortal() {
         </div>
 
         <div className="header-actions flex flex-wrap gap-4 items-center justify-between mb-6">
-          <Link href="/admin/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-            📁 Upload DICOM Files
-          </Link>
+          <div className="flex gap-4 items-center">
+            <Link href="/admin/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+              📁 Upload DICOM Files
+            </Link>
+
+            {/* Search Input */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search by Patient Name, URN, Episode, or Study..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-80 px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* {getPatientIds().length > 0 && (
             <div className="patient-filter flex items-center space-x-2">
@@ -280,7 +401,101 @@ export default function AdminPortal() {
           </Link> */}
         </div>
 
-        {Object.keys(filteredStudies).length === 0 ? (
+        {/* Search Results Summary */}
+        {(searchQuery || selectedPatient) && (
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-800">
+                  {searchQuery && (
+                    <span>Search results for "<strong>{searchQuery}</strong>"</span>
+                  )}
+                  {searchQuery && selectedPatient && <span> • </span>}
+                  {selectedPatient && (
+                    <span>Filtered by Patient: <strong>{selectedPatient}</strong></span>
+                  )}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Found {totalStudies} studies
+                  {totalStudies > studiesPerPage && (
+                    <span> • Page {currentPage} of {totalPages}</span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedPatient(null);
+                  setCurrentPage(1);
+                }}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Pagination Controls - Top */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 border border-gray-200 rounded-md">
+            <div className="text-sm text-gray-600">
+              Showing {startIndex + 1}-{Math.min(endIndex, totalStudies)} of {totalStudies} studies
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className={`px-3 py-1 rounded text-sm ${currentPage === 1
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+              >
+                Previous
+              </button>
+
+              {/* Page Numbers */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-1 rounded text-sm ${currentPage === pageNum
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-1 rounded text-sm ${currentPage === totalPages
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
+        {Object.keys(paginatedStudies).length === 0 ? (
           <div className="no-studies">
             <h2>No DICOM studies found</h2>
             <p>Upload DICOM files to get started.</p>
@@ -290,7 +505,7 @@ export default function AdminPortal() {
           </div>
         ) : (
           <div className="studies-grid">
-            {Object.entries(filteredStudies).map(([studyId, study]) => (
+            {Object.entries(paginatedStudies).map(([studyId, study]) => (
               <div key={studyId} className="study-card">
                 <div className="study-thumbnail">
                   {study.thumbnail ? (
@@ -309,6 +524,15 @@ export default function AdminPortal() {
                   <h3>{study.patientName || 'Unknown Patient'}</h3>
                   <div className="study-details">
                     <p><strong>Patient ID:</strong> {study.patientID || 'N/A'}</p>
+                    {(() => {
+                      // Extract episode ID from folder name or firstFile path
+                      const firstFile = study.firstFile || '';
+                      const folderName = firstFile.includes('/') ? firstFile.split('/')[0] : '';
+                      const episodeId = folderName.includes('_') ? folderName.split('_').slice(1).join('_') : null;
+                      return episodeId ? (
+                        <p><strong>Episode ID:</strong> {episodeId}</p>
+                      ) : null;
+                    })()}
                     <p><strong>Study Date:</strong> {study.studyDate || 'N/A'}</p>
                     <p><strong>Modality:</strong> {study.modality || 'N/A'}</p>
                     <p><strong>Description:</strong> {study.studyDescription || 'N/A'}</p>
@@ -324,6 +548,39 @@ export default function AdminPortal() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination Controls - Bottom */}
+        {totalPages > 1 && Object.keys(paginatedStudies).length > 0 && (
+          <div className="flex items-center justify-center mt-8 p-4 bg-gray-50 border border-gray-200 rounded-md">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className={`px-4 py-2 rounded text-sm font-medium ${currentPage === 1
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+              >
+                ← Previous
+              </button>
+
+              <span className="px-4 py-2 text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className={`px-4 py-2 rounded text-sm font-medium ${currentPage === totalPages
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+              >
+                Next →
+              </button>
+            </div>
           </div>
         )}
       </div>

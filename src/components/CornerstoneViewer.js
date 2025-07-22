@@ -29,6 +29,19 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   const [seriesData, setSeriesData] = useState([]);
   const [currentSeriesIndex, setCurrentSeriesIndex] = useState(0);
   const [currentSeriesFileIndex, setCurrentSeriesFileIndex] = useState(0);
+
+  // Background preloading state
+  const [preloadedImages, setPreloadedImages] = useState(new Map());
+  const [preloadQueue, setPreloadQueue] = useState([]);
+  const [isPreloading, setIsPreloading] = useState(false);
+
+  // Background preloading configuration
+  const PRELOAD_CONFIG = {
+    AHEAD_COUNT: 5,     // Preload 5 files ahead
+    BEHIND_COUNT: 3,    // Keep 3 files behind in cache
+    MAX_CACHE_SIZE: 20, // Maximum cached images
+    PRELOAD_DELAY: 100  // Delay between preloads (ms)
+  };
   const [isNavigatingInSeries, setIsNavigatingInSeries] = useState(false);
 
   const totalFramesRef = useRef(totalFrames);
@@ -613,6 +626,15 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         console.log(`📁 Loaded ${sortedFiles.length} files in ${series.length} series:`,
           series.map(s => `Series ${s.seriesNumber}: ${s.files.length} files (${s.seriesDescription})`));
         console.log(`📍 Current position: Series ${currentSeriesIdx + 1}/${series.length}, File ${(series[currentSeriesIdx]?.files.findIndex(f => f.name === filename) || 0) + 1}/${series[currentSeriesIdx]?.files.length || 0}`);
+
+        // Start background preloading for the current series
+        if (series[currentSeriesIdx] && series[currentSeriesIdx].files.length > 1) {
+          const currentFileIndex = series[currentSeriesIdx].files.findIndex(f => f.name === filename);
+          console.log(`🔄 Initiating background preloading for series with ${series[currentSeriesIdx].files.length} files`);
+          setTimeout(() => {
+            startBackgroundPreloading(Math.max(0, currentFileIndex));
+          }, 1000); // Small delay to let the current image load first
+        }
       }
     } catch (error) {
       console.warn('Could not load study files for navigation:', error);
@@ -686,52 +708,206 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         setCurrentSeriesFileIndex(fileIndex);
 
         try {
-          // Load the new file directly without changing URL (for smooth navigation)
-          const apiPath = isAdmin
-            ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-info/${encodeURIComponent(targetFile.name)}`
-            : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-info/${encodeURIComponent(targetFile.name)}`;
+          // Check if image is already preloaded
+          const cacheKey = `${targetFile.name}`;
+          if (preloadedImages.has(cacheKey)) {
+            const cachedData = preloadedImages.get(cacheKey);
 
-          const token = isAdmin
-            ? `Bearer ${localStorage.getItem('admin-auth-token')}`
-            : `Bearer ${localStorage.getItem('auth-token')}`;
+            // Display cached image
+            cornerstone.displayImage(elementRef.current, cachedData.image);
 
-          const response = await fetch(apiPath, {
-            headers: { 'Authorization': token }
-          });
-
-          if (response.ok) {
-            const newMetadata = await response.json();
-
-            // Load the new DICOM image
-            const imageApiPath = isAdmin
-              ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
-              : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(targetFile.name)}`;
-
-            const imageId = `wadouri:${imageApiPath}`;
-
-            // Check for multi-frame
-            const frames = parseInt(newMetadata?.numberOfFrames || '1');
-            setTotalFrames(frames);
-            setCurrentFrame(0); // Reset to first frame of new file
-
-            const finalImageId = frames > 1 ? `${imageId}#frame=0` : imageId;
-
-            const image = await cornerstone.loadImage(finalImageId);
-            cornerstone.displayImage(elementRef.current, image);
+            // Set metadata and frames
+            setTotalFrames(cachedData.frames);
+            setCurrentFrame(0);
 
             // Reset viewport
-            const viewport = cornerstone.getDefaultViewportForImage(elementRef.current, image);
+            const viewport = cornerstone.getDefaultViewportForImage(elementRef.current, cachedData.image);
             cornerstone.setViewport(elementRef.current, viewport);
             setViewport(viewport);
 
-            console.log(`📄 Navigated to file ${fileIndex + 1}/${currentSeries.files.length} in series: ${targetFile.name}`);
+          } else {
+            // Load the new file directly without changing URL (for smooth navigation)
+            const apiPath = isAdmin
+              ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-info/${encodeURIComponent(targetFile.name)}`
+              : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-info/${encodeURIComponent(targetFile.name)}`;
+
+            const token = isAdmin
+              ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+              : `Bearer ${localStorage.getItem('auth-token')}`;
+
+            const response = await fetch(apiPath, {
+              headers: { 'Authorization': token }
+            });
+
+            if (response.ok) {
+              const newMetadata = await response.json();
+
+              // Load the new DICOM image
+              const imageApiPath = isAdmin
+                ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
+                : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(targetFile.name)}`;
+
+              const imageId = `wadouri:${imageApiPath}`;
+
+              // Check for multi-frame
+              const frames = parseInt(newMetadata?.numberOfFrames || '1');
+              setTotalFrames(frames);
+              setCurrentFrame(0); // Reset to first frame of new file
+
+              const finalImageId = frames > 1 ? `${imageId}#frame=0` : imageId;
+
+              const image = await cornerstone.loadImage(finalImageId);
+              cornerstone.displayImage(elementRef.current, image);
+
+              // Reset viewport
+              const viewport = cornerstone.getDefaultViewportForImage(elementRef.current, image);
+              cornerstone.setViewport(elementRef.current, viewport);
+              setViewport(viewport);
+
+              console.log(`📄 Navigated to file ${fileIndex + 1}/${currentSeries.files.length} in series: ${targetFile.name}`);
+            }
           }
+
+          // Start background preloading for surrounding files
+          startBackgroundPreloading(fileIndex);
         } catch (error) {
           console.error('Error navigating to file in series:', error);
         } finally {
           setIsNavigatingInSeries(false);
         }
       }
+    }
+  };
+
+  // Background preloading functions
+  const startBackgroundPreloading = (currentIndex) => {
+    if (!seriesData[currentSeriesIndex] || isPreloading) return;
+
+    const currentSeries = seriesData[currentSeriesIndex];
+    const filesToPreload = [];
+
+    // Add files ahead of current position
+    for (let i = 1; i <= PRELOAD_CONFIG.AHEAD_COUNT; i++) {
+      const nextIndex = currentIndex + i;
+      if (nextIndex < currentSeries.files.length) {
+        const file = currentSeries.files[nextIndex];
+        const cacheKey = `${file.name}`;
+        if (!preloadedImages.has(cacheKey)) {
+          filesToPreload.push({ file, index: nextIndex, priority: i });
+        }
+      }
+    }
+
+    // Add files behind current position (lower priority)
+    for (let i = 1; i <= PRELOAD_CONFIG.BEHIND_COUNT; i++) {
+      const prevIndex = currentIndex - i;
+      if (prevIndex >= 0) {
+        const file = currentSeries.files[prevIndex];
+        const cacheKey = `${file.name}`;
+        if (!preloadedImages.has(cacheKey)) {
+          filesToPreload.push({ file, index: prevIndex, priority: PRELOAD_CONFIG.AHEAD_COUNT + i });
+        }
+      }
+    }
+
+    // Sort by priority (lower number = higher priority)
+    filesToPreload.sort((a, b) => a.priority - b.priority);
+
+    if (filesToPreload.length > 0) {
+      setPreloadQueue(filesToPreload);
+      processPreloadQueue(filesToPreload);
+    }
+  };
+
+  const processPreloadQueue = async (queue) => {
+    if (isPreloading || queue.length === 0) return;
+
+    setIsPreloading(true);
+
+    for (const item of queue) {
+      try {
+        await preloadFile(item.file);
+
+        // Small delay to prevent overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, PRELOAD_CONFIG.PRELOAD_DELAY));
+
+        // Check if we should stop (user navigated away from series)
+        const currentSeries = seriesData[currentSeriesIndex];
+        if (!currentSeries || !currentSeries.files.includes(item.file)) {
+          break;
+        }
+      } catch (error) {
+        console.warn(`⚠️ Failed to preload ${item.file.name}:`, error);
+      }
+    }
+
+    setIsPreloading(false);
+    setPreloadQueue([]);
+  };
+
+  const preloadFile = async (file) => {
+    const cacheKey = `${file.name}`;
+
+    if (preloadedImages.has(cacheKey)) {
+      return; // Already cached
+    }
+
+    try {
+      // Load metadata
+      const apiPath = isAdmin
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-info/${encodeURIComponent(file.name)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-info/${encodeURIComponent(file.name)}`;
+
+      const token = isAdmin
+        ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+        : `Bearer ${localStorage.getItem('auth-token')}`;
+
+      const response = await fetch(apiPath, {
+        headers: { 'Authorization': token }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load metadata: ${response.status}`);
+      }
+
+      const metadata = await response.json();
+
+      // Load image
+      const imageApiPath = isAdmin
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(file.name)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(file.name)}`;
+
+      const imageId = `wadouri:${imageApiPath}`;
+      const frames = parseInt(metadata?.numberOfFrames || '1');
+      const finalImageId = frames > 1 ? `${imageId}#frame=0` : imageId;
+
+      const image = await cornerstone.loadImage(finalImageId);
+
+      // Cache the loaded image and metadata
+      const cachedData = {
+        image,
+        metadata,
+        frames,
+        timestamp: Date.now()
+      };
+
+      // Manage cache size
+      if (preloadedImages.size >= PRELOAD_CONFIG.MAX_CACHE_SIZE) {
+        // Remove oldest cached image
+        const oldestKey = Array.from(preloadedImages.keys())[0];
+        setPreloadedImages(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(oldestKey);
+          return newMap;
+        });
+      }
+
+      setPreloadedImages(prev => new Map(prev.set(cacheKey, cachedData)));
+
+
+    } catch (error) {
+      console.warn(`❌ Failed to preload ${file.name}:`, error);
+      throw error;
     }
   };
 

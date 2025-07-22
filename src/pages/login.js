@@ -128,6 +128,12 @@ export default function LoginPage() {
   };
 
   const handleResendOtp = async () => {
+    // Check if current OTP is still valid
+    if (timeLeft > 0) {
+      setError(`Please wait ${formatTimeLeft(timeLeft)} before requesting a new code`);
+      return;
+    }
+
     setError('');
     setSuccess('');
     setLoading(true);
@@ -287,10 +293,13 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleResendOtp}
-                disabled={loading || retryCount >= maxRetries}
+                disabled={loading || retryCount >= maxRetries || timeLeft > 0}
                 className="resend-button"
+                title={timeLeft > 0 ? `Wait ${formatTimeLeft(timeLeft)} before resending` : ''}
               >
-                {loading ? 'Sending...' : `Resend Code (${retryCount}/${maxRetries})`}
+                {loading ? 'Sending...' :
+                  timeLeft > 0 ? `Resend Code in ${formatTimeLeft(timeLeft)}` :
+                    `Resend Code (${retryCount}/${maxRetries})`}
               </button>
 
               {/* <button
