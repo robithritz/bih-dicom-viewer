@@ -21,8 +21,6 @@ async function handler(req, res) {
     const limitNum = parseInt(limit);
     const offset = (pageNum - 1) * limitNum;
 
-    console.log(`📊 Admin fetching DICOM studies - Page ${pageNum}, Limit ${limitNum}, Search: "${search}", Patient: "${patient}"`);
-
     // Get all DICOM files organized by studies (this is still needed for organization)
     let files;
     if (patient) {
@@ -36,8 +34,6 @@ async function handler(req, res) {
       // Get all files from all folders
       files = getDicomFiles(null);
     }
-
-    console.log(`📁 Found ${files.length} total DICOM files`);
 
     if (files.length === 0) {
       return res.status(200).json({
@@ -56,8 +52,6 @@ async function handler(req, res) {
     // Organize files into studies (lightweight - just organization, no heavy metadata)
     const allStudies = organizeDicomStudies(files);
     const studyEntries = Object.entries(allStudies);
-
-    console.log(`📚 Organized into ${studyEntries.length} studies`);
 
     // First, add patient details to ALL studies for proper search functionality
     try {
@@ -123,8 +117,6 @@ async function handler(req, res) {
     // Apply pagination - only get the studies for current page
     const paginatedStudyEntries = filteredStudies.slice(offset, offset + limitNum);
 
-    console.log(`📄 Processing ${paginatedStudyEntries.length} studies for page ${pageNum}`);
-
     // Convert back to object format for only the paginated studies
     const paginatedStudies = Object.fromEntries(paginatedStudyEntries);
 
@@ -142,7 +134,6 @@ async function handler(req, res) {
       searchQuery: search || null
     };
 
-    console.log(`✅ Returning ${Object.keys(paginatedStudies).length} studies for page ${pageNum}/${totalPages}`);
     res.status(200).json(response);
 
   } catch (error) {
