@@ -10,9 +10,18 @@ async function handler(req, res) {
   }
 
   try {
-    const { patient } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      patient = ''
+    } = req.query;
 
-    // Admin can access all studies or filter by specific patient/folder
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Get all DICOM files organized by studies (this is still needed for organization)
     let files;
     if (patient) {
       // Try exact folder match first, then patient ID search
@@ -26,24 +35,40 @@ async function handler(req, res) {
       files = getDicomFiles(null);
     }
 
-    const studies = organizeDicomStudies(files);
+    if (files.length === 0) {
+      return res.status(200).json({
+        studies: {},
+        pagination: {
+          currentPage: pageNum,
+          totalPages: 0,
+          totalStudies: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+          limit: limitNum
+        }
+      });
+    }
 
-    // get patient detail from db using studies.firstFile substring before first '_'
+    // Organize files into studies (lightweight - just organization, no heavy metadata)
+    const allStudies = organizeDicomStudies(files);
+    const studyEntries = Object.entries(allStudies);
+
+    // First, add patient details to ALL studies for proper search functionality
     try {
-      for (const study of Object.values(studies)) {
+      for (const study of Object.values(allStudies)) {
         if (study.firstFile) {
-          const patientId = study.firstFile.split('_')[0];
+          const patientIdFromFile = study.firstFile.split('_')[0];
           const patient = await prisma.patient.findUnique({
-            where: { urn: patientId }
+            where: { urn: patientIdFromFile }
           });
 
           if (patient) {
-            studies[study.studyInstanceUID].uploadedPatientName = `${patient.firstName} ${patient.lastName}`;
-            studies[study.studyInstanceUID].uploadedPatientId = patientId;
+            study.uploadedPatientName = `${patient.firstName} ${patient.lastName}`;
+            study.uploadedPatientId = patientIdFromFile;
           } else {
             // Fallback if patient not found in database
-            studies[study.studyInstanceUID].uploadedPatientName = 'Unknown Patient';
-            studies[study.studyInstanceUID].uploadedPatientId = patientId;
+            study.uploadedPatientName = 'Unknown Patient';
+            study.uploadedPatientId = patientIdFromFile;
           }
         }
       }
@@ -54,14 +79,66 @@ async function handler(req, res) {
       await prisma.$disconnect();
     }
 
-    res.status(200).json({
-      studies,
+    // Now apply search filtering with complete patient data
+    let filteredStudies = studyEntries;
+
+    // Apply search filter
+    if (search.trim()) {
+      const searchQuery = search.toLowerCase().trim();
+      filteredStudies = filteredStudies.filter(([_, study]) => {
+        // Search in patient name (both original and uploaded)
+        const patientName = (study.patientName || '').toLowerCase();
+        const uploadedPatientName = (study.uploadedPatientName || '').toLowerCase();
+
+        // Search in URN/Patient ID (both original and uploaded)
+        const patientId = (study.patientID || '').toLowerCase();
+        const uploadedPatientId = (study.uploadedPatientId || '').toLowerCase();
+
+        // Search in episode (extract from folder name or firstFile path)
+        const firstFile = study.firstFile || '';
+        const folderName = firstFile.includes('/') ? firstFile.split('/')[0] : '';
+        const episode = folderName.includes('_') ? folderName.split('_').slice(1).join('_') : '';
+
+        // Search in study description
+        const studyDescription = (study.studyDescription || '').toLowerCase();
+
+        return patientName.includes(searchQuery) ||
+          uploadedPatientName.includes(searchQuery) ||
+          patientId.includes(searchQuery) ||
+          uploadedPatientId.includes(searchQuery) ||
+          episode.toLowerCase().includes(searchQuery) ||
+          studyDescription.includes(searchQuery);
+      });
+    }
+
+    const totalStudies = filteredStudies.length;
+    const totalPages = Math.ceil(totalStudies / limitNum);
+
+    // Apply pagination - only get the studies for current page
+    const paginatedStudyEntries = filteredStudies.slice(offset, offset + limitNum);
+
+    // Convert back to object format for only the paginated studies
+    const paginatedStudies = Object.fromEntries(paginatedStudyEntries);
+
+    const response = {
+      studies: paginatedStudies,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalStudies,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+        limit: limitNum
+      },
       patientFilter: patient || null,
-      message: `Loaded ${files.length} files${patient ? ` for patient ${patient}` : ' (all patients)'}`
-    });
+      searchQuery: search || null
+    };
+
+    res.status(200).json(response);
+
   } catch (error) {
     console.error('Error reading DICOM directory:', error);
-    res.status(500).json({ error: 'Error loading DICOM files' });
+    res.status(500).json({ error: 'Failed to read DICOM studies' });
   }
 }
 
