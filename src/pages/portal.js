@@ -17,8 +17,15 @@ export default function AdminPortal() {
 
   // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState(''); // For immediate UI updates
   const [currentPage, setCurrentPage] = useState(1);
-  const [studiesPerPage] = useState(10); // Number of studies per page
+  const [studiesPerPage] = useState(3); // Number of studies per page
+  const [paginationInfo, setPaginationInfo] = useState({
+    totalPages: 0,
+    totalStudies: 0,
+    hasNextPage: false,
+    hasPrevPage: false
+  });
 
   // Check for patient parameter in URL
   useEffect(() => {
@@ -27,12 +34,12 @@ export default function AdminPortal() {
     }
   }, [router.query.patient]);
 
-  // Fetch studies when authenticated or patient selection changes
+  // Fetch studies when authenticated or parameters change
   useEffect(() => {
     if (isAuthenticated) {
-      fetchStudies();
+      fetchStudies(currentPage, searchQuery, selectedPatient);
     }
-  }, [selectedPatient, isAuthenticated]);
+  }, [selectedPatient, isAuthenticated, currentPage, searchQuery]);
 
   // Set loading state based on AuthContext
   // useEffect(() => {
@@ -97,15 +104,25 @@ export default function AdminPortal() {
     }
   };
 
-  const fetchStudies = async () => {
+  const fetchStudies = async (page = currentPage, searchQuery = searchQuery, patientFilter = selectedPatient) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('admin-auth-token');
-      const url = selectedPatient
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies?patient=${selectedPatient}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies`;
+      setError(null);
 
-      const response = await fetch(url, {
+      const token = localStorage.getItem('admin-auth-token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Build query parameters for server-side pagination
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: studiesPerPage.toString(),
+        search: searchQuery || '',
+        patient: patientFilter || ''
+      });
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -114,8 +131,18 @@ export default function AdminPortal() {
       if (!response.ok) {
         throw new Error('Failed to fetch studies');
       }
+
       const data = await response.json();
-      setStudies(data.studies);
+      console.log('Server-side paginated studies:', data);
+
+      setStudies(data.studies || {});
+
+      // Update pagination state from server response
+      if (data.pagination) {
+        setCurrentPage(data.pagination.currentPage);
+        setPaginationInfo(data.pagination);
+      }
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -143,117 +170,109 @@ export default function AdminPortal() {
     }
   };
 
-  // Search and filter studies
-  const searchAndFilterStudies = () => {
-    let filtered = Object.entries(studies);
+  // Server-side pagination - studies are already filtered and paginated
+  const displayStudies = studies;
 
-    // Filter by selected patient if any
-    if (selectedPatient) {
-      filtered = filtered.filter(([_, study]) => study.patientID === selectedPatient);
-    }
+  // Get pagination info from server response
+  const totalStudies = paginationInfo.totalStudies || 0;
+  const totalPages = paginationInfo.totalPages || 0;
+  const startIndex = ((paginationInfo.currentPage || 1) - 1) * studiesPerPage;
+  const endIndex = Math.min(startIndex + studiesPerPage, totalStudies);
 
-    // Search filter by patient name, URN (patientID), uploaded patient info, or episode (from folder name)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(([_, study]) => {
-        // Search in patient name (both original and uploaded)
-        const patientName = (study.patientName || '').toLowerCase();
-        const uploadedPatientName = (study.uploadedPatientName || '').toLowerCase();
-
-        // Search in URN/Patient ID (both original and uploaded)
-        const patientId = (study.patientID || '').toLowerCase();
-        const uploadedPatientId = (study.uploadedPatientId || '').toLowerCase();
-
-        // Search in episode (extract from folder name or firstFile path)
-        const firstFile = study.firstFile || '';
-        const folderName = firstFile.includes('/') ? firstFile.split('/')[0] : '';
-        const episode = folderName.includes('_') ? folderName.split('_').slice(1).join('_') : '';
-
-        // Search in study description
-        const studyDescription = (study.studyDescription || '').toLowerCase();
-
-        return patientName.includes(query) ||
-          uploadedPatientName.includes(query) ||
-          patientId.includes(query) ||
-          uploadedPatientId.includes(query) ||
-          episode.toLowerCase().includes(query) ||
-          studyDescription.includes(query);
-      });
-    }
-
-    return Object.fromEntries(filtered);
-  };
-
-  const filteredStudies = searchAndFilterStudies();
-
-  // Pagination logic
-  const totalStudies = Object.keys(filteredStudies).length;
-  const totalPages = Math.ceil(totalStudies / studiesPerPage);
-  const startIndex = (currentPage - 1) * studiesPerPage;
-  const endIndex = startIndex + studiesPerPage;
-
-  const paginatedStudies = Object.fromEntries(
-    Object.entries(filteredStudies).slice(startIndex, endIndex)
-  );
-
-  // Reset to first page when search query changes
+  // Debounce search input - update searchQuery after user stops typing
   useEffect(() => {
-    setCurrentPage(1);
+    const debounceTimer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchInput]);
+
+  // Reset to first page when search query changes (triggers new API call)
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
   }, [searchQuery, selectedPatient]);
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="min-h-screen bg-gray-50">
-          <div className="max-w-7xl">
-            <div className="header">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
-                    <Image src={`${router.basePath}/images/ihc-white.png`} alt="Logo" width={200} height={80} />
-                    DICOM Viewer - Admin Portal
-                  </h1>
-                  <p className="text-white">Medical Image Viewer and Management System</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Loading indicator */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading DICOM Studies</h2>
-              <p className="text-gray-600">Please wait while we fetch your studies...</p>
-            </div>
-
-            {/* Loading skeleton cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
-                  {/* Skeleton thumbnail */}
-                  <div className="h-32 bg-gray-200"></div>
-
-                  {/* Skeleton content */}
-                  <div className="p-6">
-                    <div className="space-y-3">
-                      <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                      <div className="h-3 bg-gray-200 rounded w-2/5"></div>
-                    </div>
-                    <div className="mt-4 h-8 bg-gray-200 rounded"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
+  const header = (
+    <>
+      <div className="header">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              <Image src={`${router.basePath}/images/ihc-white.png`} alt="Logo" width={200} height={80} />
+              DICOM Viewer - Admin Portal
+            </h1>
+            <p className="text-white">Medical Image Viewer and Management System</p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-white">
+              Welcome, {user?.name} ({user?.role})
+            </span>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Logout
+            </button>
           </div>
         </div>
-      </Layout>
-    );
-  }
+      </div>
+
+      <div className="header-actions flex flex-wrap gap-4 items-center justify-between mb-6">
+        <div className="flex gap-4 items-center">
+          <Link href="/admin/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+            📁 Upload DICOM Files
+          </Link>
+
+          {/* Search Input */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by Patient Name, URN, Episode, or Study..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-80 px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {searchInput && (
+              <button
+                onClick={() => {
+                  setSearchInput('');
+                  setSearchQuery('');
+                }}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* {getPatientIds().length > 0 && (
+            <div className="patient-filter flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700">Filter by Patient:</label>
+              <select
+                value={selectedPatient || ''}
+                onChange={(e) => handlePatientFilter(e.target.value || null)}
+                className="border border-gray-300 rounded-md px-3 py-1 text-sm"
+              >
+                <option value="">All Patients</option>
+                {getPatientIds().map(patientId => (
+                  <option key={patientId} value={patientId}>
+                    {patientId}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )} */}
+
+        {/* <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+            Patient Portal →
+          </Link> */}
+      </div>
+    </>
+  );
 
   if (!isAuthenticated) {
     return (
@@ -329,78 +348,47 @@ export default function AdminPortal() {
   return (
     <Layout>
       <div className="container">
-        <div className="header">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                <Image src={`${router.basePath}/images/ihc-white.png`} alt="Logo" width={200} height={80} />
-                DICOM Viewer - Admin Portal
-              </h1>
-              <p className="text-white">Medical Image Viewer and Management System</p>
+        {header}
+
+        {loading ? (
+          <Layout>
+            <div className="min-h-screen bg-gray-50">
+              <div className="max-w-7xl">
+                {/* Loading indicator */}
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading DICOM Studies</h2>
+                  <p className="text-gray-600">Please wait while we fetch your studies...</p>
+                </div>
+
+                {/* Loading skeleton cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
+                      {/* Skeleton thumbnail */}
+                      <div className="h-32 bg-gray-200"></div>
+
+                      {/* Skeleton content */}
+                      <div className="p-6">
+                        <div className="space-y-3">
+                          <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                          <div className="h-3 bg-gray-200 rounded w-2/5"></div>
+                        </div>
+                        <div className="mt-4 h-8 bg-gray-200 rounded"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-white">
-                Welcome, {user?.name} ({user?.role})
-              </span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="header-actions flex flex-wrap gap-4 items-center justify-between mb-6">
-          <div className="flex gap-4 items-center">
-            <Link href="/admin/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-              📁 Upload DICOM Files
-            </Link>
-
-            {/* Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search by Patient Name, URN, Episode, or Study..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-80 px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* {getPatientIds().length > 0 && (
-            <div className="patient-filter flex items-center space-x-2">
-              <label className="text-sm font-medium text-gray-700">Filter by Patient:</label>
-              <select
-                value={selectedPatient || ''}
-                onChange={(e) => handlePatientFilter(e.target.value || null)}
-                className="border border-gray-300 rounded-md px-3 py-1 text-sm"
-              >
-                <option value="">All Patients</option>
-                {getPatientIds().map(patientId => (
-                  <option key={patientId} value={patientId}>
-                    {patientId}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )} */}
-
-          {/* <Link href="/" className="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
-            Patient Portal →
-          </Link> */}
-        </div>
-
+          </Layout>
+        ) : ''}
         {/* Search Results Summary */}
         {(searchQuery || selectedPatient) && (
           <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
@@ -424,6 +412,7 @@ export default function AdminPortal() {
               </div>
               <button
                 onClick={() => {
+                  setSearchInput('');
                   setSearchQuery('');
                   setSelectedPatient(null);
                   setCurrentPage(1);
@@ -495,7 +484,7 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {Object.keys(paginatedStudies).length === 0 ? (
+        {Object.keys(studies).length === 0 ? (
           <div className="no-studies">
             <h2>No DICOM studies found</h2>
             <p>Upload DICOM files to get started.</p>
@@ -505,7 +494,7 @@ export default function AdminPortal() {
           </div>
         ) : (
           <div className="studies-grid">
-            {Object.entries(paginatedStudies).map(([studyId, study]) => (
+            {Object.entries(studies).map(([studyId, study]) => (
               <div key={studyId} className="study-card">
                 <div className="study-thumbnail">
                   {study.thumbnail ? (
@@ -552,7 +541,7 @@ export default function AdminPortal() {
         )}
 
         {/* Pagination Controls - Bottom */}
-        {totalPages > 1 && Object.keys(paginatedStudies).length > 0 && (
+        {totalPages > 1 && Object.keys(studies).length > 0 && (
           <div className="flex items-center justify-center mt-8 p-4 bg-gray-50 border border-gray-200 rounded-md">
             <div className="flex items-center space-x-2">
               <button
