@@ -20,12 +20,6 @@ export default function AdminPortal() {
   const [searchInput, setSearchInput] = useState(''); // For immediate UI updates
   const [currentPage, setCurrentPage] = useState(1);
   const [studiesPerPage] = useState(3); // Number of studies per page
-  const [paginationInfo, setPaginationInfo] = useState({
-    totalPages: 0,
-    totalStudies: 0,
-    hasNextPage: false,
-    hasPrevPage: false
-  });
 
   // Check for patient parameter in URL
   useEffect(() => {
@@ -34,12 +28,12 @@ export default function AdminPortal() {
     }
   }, [router.query.patient]);
 
-  // Fetch studies when authenticated or parameters change
+  // Fetch studies when authenticated or patient selection changes
   useEffect(() => {
     if (isAuthenticated) {
-      fetchStudies(currentPage, searchQuery, selectedPatient);
+      fetchStudies();
     }
-  }, [selectedPatient, isAuthenticated, currentPage, searchQuery]);
+  }, [selectedPatient, isAuthenticated]);
 
   // Set loading state based on AuthContext
   // useEffect(() => {
@@ -104,7 +98,7 @@ export default function AdminPortal() {
     }
   };
 
-  const fetchStudies = async (page = currentPage, searchQuery = searchQuery, patientFilter = selectedPatient) => {
+  const fetchStudies = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -114,15 +108,11 @@ export default function AdminPortal() {
         throw new Error('No authentication token found');
       }
 
-      // Build query parameters for server-side pagination
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: studiesPerPage.toString(),
-        search: searchQuery || '',
-        patient: patientFilter || ''
-      });
+      const url = selectedPatient
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies?patient=${selectedPatient}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies`;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies?${params}`, {
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -133,15 +123,9 @@ export default function AdminPortal() {
       }
 
       const data = await response.json();
-      console.log('Server-side paginated studies:', data);
+      console.log('Studies loaded:', data);
 
       setStudies(data.studies || {});
-
-      // Update pagination state from server response
-      if (data.pagination) {
-        setCurrentPage(data.pagination.currentPage);
-        setPaginationInfo(data.pagination);
-      }
 
     } catch (err) {
       setError(err.message);
@@ -170,14 +154,62 @@ export default function AdminPortal() {
     }
   };
 
-  // Server-side pagination - studies are already filtered and paginated
-  const displayStudies = studies;
+  // Client-side search and filtering with lazy loading
+  const searchAndFilterStudies = () => {
+    let filtered = Object.entries(studies);
 
-  // Get pagination info from server response
-  const totalStudies = paginationInfo.totalStudies || 0;
-  const totalPages = paginationInfo.totalPages || 0;
-  const startIndex = ((paginationInfo.currentPage || 1) - 1) * studiesPerPage;
-  const endIndex = Math.min(startIndex + studiesPerPage, totalStudies);
+    // Filter by selected patient if any
+    if (selectedPatient) {
+      filtered = filtered.filter(([_, study]) => {
+        const studyPatientId = study.firstFile ? study.firstFile.split('_')[0] : '';
+        return studyPatientId === selectedPatient;
+      });
+    }
+
+    // Search filter by patient name, URN (patientID), uploaded patient info, or episode (from folder name)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(([_, study]) => {
+        // Search in patient name (both original and uploaded)
+        const patientName = (study.patientName || '').toLowerCase();
+        const uploadedPatientName = (study.uploadedPatientName || '').toLowerCase();
+
+        // Search in URN/Patient ID (both original and uploaded)
+        const patientId = (study.patientID || '').toLowerCase();
+        const uploadedPatientId = (study.uploadedPatientId || '').toLowerCase();
+
+        // Search in episode (extract from folder name or firstFile path)
+        const firstFile = study.firstFile || '';
+        const folderName = firstFile.includes('/') ? firstFile.split('/')[0] : '';
+        const episode = folderName.includes('_') ? folderName.split('_').slice(1).join('_') : '';
+
+        // Search in study description
+        const studyDescription = (study.studyDescription || '').toLowerCase();
+
+        return patientName.includes(query) ||
+          uploadedPatientName.includes(query) ||
+          patientId.includes(query) ||
+          uploadedPatientId.includes(query) ||
+          episode.toLowerCase().includes(query) ||
+          studyDescription.includes(query);
+      });
+    }
+
+    return Object.fromEntries(filtered);
+  };
+
+  const filteredStudies = searchAndFilterStudies();
+
+  // Client-side pagination with lazy loading
+  const totalStudies = Object.keys(filteredStudies).length;
+  const totalPages = Math.ceil(totalStudies / studiesPerPage);
+  const startIndex = (currentPage - 1) * studiesPerPage;
+  const endIndex = startIndex + studiesPerPage;
+
+  // Lazy load: only render studies for current page
+  const paginatedStudies = Object.fromEntries(
+    Object.entries(filteredStudies).slice(startIndex, endIndex)
+  );
 
   // Debounce search input - update searchQuery after user stops typing
   useEffect(() => {
@@ -188,11 +220,9 @@ export default function AdminPortal() {
     return () => clearTimeout(debounceTimer);
   }, [searchInput]);
 
-  // Reset to first page when search query changes (triggers new API call)
+  // Reset to first page when search query changes
   useEffect(() => {
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    }
+    setCurrentPage(1);
   }, [searchQuery, selectedPatient]);
 
   const header = (
@@ -274,7 +304,7 @@ export default function AdminPortal() {
     </>
   );
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !authContextLoading) {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -484,17 +514,23 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {Object.keys(studies).length === 0 ? (
+        {Object.keys(filteredStudies).length === 0 ? (
           <div className="no-studies">
             <h2>No DICOM studies found</h2>
-            <p>Upload DICOM files to get started.</p>
-            <Link href="/upload" className="upload-link">
-              📁 Upload Files
-            </Link>
+            <p>
+              {searchQuery || selectedPatient
+                ? 'Try adjusting your search criteria'
+                : 'Upload DICOM files to get started.'}
+            </p>
+            {!searchQuery && !selectedPatient && (
+              <Link href="/upload" className="upload-link">
+                📁 Upload Files
+              </Link>
+            )}
           </div>
         ) : (
           <div className="studies-grid">
-            {Object.entries(studies).map(([studyId, study]) => (
+            {Object.entries(paginatedStudies).map(([studyId, study]) => (
               <div key={studyId} className="study-card">
                 <div className="study-thumbnail">
                   {study.thumbnail ? (
@@ -541,7 +577,7 @@ export default function AdminPortal() {
         )}
 
         {/* Pagination Controls - Bottom */}
-        {totalPages > 1 && Object.keys(studies).length > 0 && (
+        {totalPages > 1 && Object.keys(paginatedStudies).length > 0 && (
           <div className="flex items-center justify-center mt-8 p-4 bg-gray-50 border border-gray-200 rounded-md">
             <div className="flex items-center space-x-2">
               <button

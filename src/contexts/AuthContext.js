@@ -149,6 +149,10 @@ export const AuthProvider = ({ children }) => {
       });
 
       setUser(null);
+      if (router.pathname.includes('/portal')) {
+        router.push('/portal');
+        return;
+      }
       router.push('/');
     } catch (error) {
       console.error('Logout failed:', error);
