@@ -30,9 +30,18 @@ export const createOTPSession = async (email) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Check retry limits
+    // Check retry limits and existing valid OTP
     if (existingSession) {
       const timeSinceLastRequest = now - existingSession.lastRequestTime;
+
+      // Check if current OTP is still valid (not expired)
+      if (existingSession.expiresAt > now) {
+        const remainingTime = Math.ceil((existingSession.expiresAt - now) / 1000);
+        const minutes = Math.floor(remainingTime / 60);
+        const seconds = remainingTime % 60;
+        const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        throw new Error(`Current verification code is still valid. Please wait ${timeString} before requesting a new code.`);
+      }
 
       if (existingSession.retryCount >= MAX_RETRY_COUNT &&
         timeSinceLastRequest < (RETRY_COOLDOWN_TIME * 1000)) {

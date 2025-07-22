@@ -18,7 +18,7 @@ export default function AdminPortal() {
   // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [studiesPerPage] = useState(3); // Number of studies per page
+  const [studiesPerPage] = useState(10); // Number of studies per page
 
   // Check for patient parameter in URL
   useEffect(() => {
