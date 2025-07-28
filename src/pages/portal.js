@@ -241,6 +241,9 @@ export default function AdminPortal() {
           <Link href="/admin/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
             📁 Upload DICOM Files
           </Link>
+          <Link href="/admin/upload-history" className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+            📋 Upload History
+          </Link>
 
           {/* Search Input */}
           <div className="relative">
