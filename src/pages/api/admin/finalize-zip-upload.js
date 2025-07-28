@@ -3,14 +3,137 @@ import path from 'path';
 import yauzl from 'yauzl';
 import { requireAdminAuth } from '../../../lib/auth-middleware';
 import { UploadSessionManager, ExtractionSessionManager } from '../../../lib/zip-session-manager';
+import { PrismaClient } from '@prisma/client';
+import { getDicomFiles, organizeDicomStudies } from '../../../lib/dicom';
 
 // Directories
 const TEMP_DIR = path.join(process.cwd(), 'temp', 'zip-chunks');
 const DICOM_DIR = path.join(process.cwd(), 'DICOM');
 
+// Prisma client will be initialized per operation
+
 // Ensure DICOM directory exists
 if (!fs.existsSync(DICOM_DIR)) {
   fs.mkdirSync(DICOM_DIR, { recursive: true });
+}
+
+/**
+ * Process DICOM studies and save to database
+ */
+async function processDicomStudies(folderName, sessionId) {
+  let prismaClient = null;
+
+  try {
+    console.log(`📊 Processing DICOM studies for folder: ${folderName}`);
+
+    // Create a new Prisma client instance for this operation
+    prismaClient = new PrismaClient();
+
+    // Update extraction status
+    ExtractionSessionManager.update(sessionId, {
+      stage: 'Processing DICOM studies',
+      message: 'Analyzing DICOM files and saving to database...'
+    });
+
+    // Get DICOM files from the extracted folder
+    console.log(`🔍 Looking for DICOM files in folder: ${folderName}`);
+    const files = getDicomFiles(folderName);
+    console.log(`📁 Found ${files.length} DICOM files:`, files.slice(0, 5)); // Log first 5 files
+
+    if (files.length === 0) {
+      console.log(`⚠️ No DICOM files found in folder: ${folderName}`);
+      return { studiesProcessed: 0, studiesSkipped: 0 };
+    }
+
+    // Organize files into studies
+    console.log(`🔄 Organizing ${files.length} files into studies...`);
+    const studies = organizeDicomStudies(files);
+    const studyEntries = Object.entries(studies);
+
+    console.log(`📚 Found ${studyEntries.length} DICOM studies in ${files.length} files`);
+    console.log(`📋 Study UIDs:`, studyEntries.map(([uid]) => uid));
+
+    let studiesProcessed = 0;
+    let studiesSkipped = 0;
+
+    // Extract patient ID from folder name (format: patientId_episodeId)
+    const uploadedPatientId = folderName.split('_')[0];
+    console.log(`👤 Extracted patient ID: ${uploadedPatientId} from folder: ${folderName}`);
+
+    for (const [studyInstanceUID, study] of studyEntries) {
+      try {
+        console.log(`🔍 Processing study: ${studyInstanceUID}`);
+        console.log(`📊 Study data:`, {
+          patientName: study.patientName,
+          patientID: study.patientID,
+          studyDate: study.studyDate,
+          modality: study.modality,
+          firstFile: study.firstFile
+        });
+
+        // Check if study already exists
+        const existingStudy = await prismaClient.dicomStudy.findUnique({
+          where: { studyInstanceUID }
+        });
+
+        if (existingStudy) {
+          console.log(`⏭️ Study already exists: ${studyInstanceUID}`);
+          studiesSkipped++;
+          continue;
+        }
+
+        // Prepare study data for database
+        const studyData = {
+          studyInstanceUID,
+          patientName: study.patientName || null,
+          patientID: study.patientID || null,
+          studyDate: study.studyDate || null,
+          studyTime: study.studyTime || null,
+          studyDescription: study.studyDescription || null,
+          modality: study.modality || null,
+          thumbnail: study.thumbnail || null,
+          firstFile: study.firstFile,
+          uploadedPatientId,
+          uploadedFolderName: folderName,
+          active: true
+        };
+
+        console.log(`💾 Inserting study data:`, studyData);
+
+        // Insert study into database
+        const createdStudy = await prismaClient.dicomStudy.create({
+          data: studyData
+        });
+
+        console.log(`✅ Saved study to database with ID: ${createdStudy.id}, UID: ${studyInstanceUID}`);
+        studiesProcessed++;
+
+        // Update progress
+        ExtractionSessionManager.update(sessionId, {
+          message: `Processed ${studiesProcessed + studiesSkipped}/${studyEntries.length} studies...`
+        });
+
+      } catch (studyError) {
+        console.error(`❌ Error processing study ${studyInstanceUID}:`, studyError);
+        console.error(`❌ Study error stack:`, studyError.stack);
+        studiesSkipped++;
+      }
+    }
+
+    console.log(`📊 DICOM processing complete: ${studiesProcessed} processed, ${studiesSkipped} skipped`);
+
+    return { studiesProcessed, studiesSkipped };
+
+  } catch (error) {
+    console.error('❌ Error processing DICOM studies:', error);
+    console.error('❌ Processing error stack:', error.stack);
+    throw error;
+  } finally {
+    if (prismaClient) {
+      await prismaClient.$disconnect();
+      console.log('🔌 Prisma client disconnected');
+    }
+  }
 }
 
 
@@ -214,22 +337,57 @@ async function extractZipFile(zipPath, folderName, sessionId) {
           console.warn('⚠️ Failed to clean up unwanted files:', cleanupError);
         }
 
-        // Update final status
-        ExtractionSessionManager.setComplete(sessionId, {
-          dicomFilesExtracted,
-          totalFilesInZip: totalEntries
-        });
-        ExtractionSessionManager.update(sessionId, {
-          stage: 'Completed',
-          message: `Successfully extracted ${dicomFilesExtracted} DICOM files to folder: ${finalFolderName}`,
-          finalFolderName: finalFolderName
-        });
+        // Process DICOM studies and save to database
+        console.log(`🔄 Starting DICOM study processing for folder: ${finalFolderName}`);
 
-        resolve({
-          dicomFilesExtracted,
-          totalFilesInZip: totalEntries,
-          finalFolderName: finalFolderName
-        });
+        processDicomStudies(finalFolderName, sessionId)
+          .then((processingResult) => {
+            console.log(`✅ DICOM processing completed:`, processingResult);
+
+            // Update final status with database processing results
+            ExtractionSessionManager.setComplete(sessionId, {
+              dicomFilesExtracted,
+              totalFilesInZip: totalEntries,
+              studiesProcessed: processingResult.studiesProcessed,
+              studiesSkipped: processingResult.studiesSkipped
+            });
+            ExtractionSessionManager.update(sessionId, {
+              stage: 'Completed',
+              message: `Successfully extracted ${dicomFilesExtracted} DICOM files and processed ${processingResult.studiesProcessed} studies to folder: ${finalFolderName}`,
+              finalFolderName: finalFolderName
+            });
+
+            resolve({
+              dicomFilesExtracted,
+              totalFilesInZip: totalEntries,
+              finalFolderName: finalFolderName,
+              studiesProcessed: processingResult.studiesProcessed,
+              studiesSkipped: processingResult.studiesSkipped
+            });
+          })
+          .catch((processingError) => {
+            console.error('❌ DICOM processing failed:', processingError);
+            console.error('❌ Full error stack:', processingError.stack);
+
+            // Still mark as complete but with processing error
+            ExtractionSessionManager.setComplete(sessionId, {
+              dicomFilesExtracted,
+              totalFilesInZip: totalEntries,
+              processingError: processingError.message
+            });
+            ExtractionSessionManager.update(sessionId, {
+              stage: 'Completed with warnings',
+              message: `Extracted ${dicomFilesExtracted} DICOM files but failed to process studies: ${processingError.message}`,
+              finalFolderName: finalFolderName
+            });
+
+            resolve({
+              dicomFilesExtracted,
+              totalFilesInZip: totalEntries,
+              finalFolderName: finalFolderName,
+              processingError: processingError.message
+            });
+          });
       });
 
       zipfile.on('error', (err) => {
