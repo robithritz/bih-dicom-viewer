@@ -13,10 +13,12 @@ export default function AdminPortal() {
   const [studies, setStudies] = useState({});
   const [error, setError] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
 
   // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
+  const [oldSearchQuery, setoldSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState(''); // For immediate UI updates
   const [currentPage, setCurrentPage] = useState(1);
   const [studiesPerPage] = useState(10); // Number of studies per page
@@ -34,12 +36,25 @@ export default function AdminPortal() {
     }
   }, [router.query.patient]);
 
-  // Fetch studies when authenticated or parameters change
+  // Fetch studies when authenticated or when page changes (but not when search/patient changes as they reset page)
   useEffect(() => {
     if (isAuthenticated) {
-      fetchStudies(currentPage, searchQuery, selectedPatient);
+
+      if (searchQuery !== oldSearchQuery) {
+        setoldSearchQuery(searchQuery);
+
+        if (currentPage === 1) {
+          fetchStudies(1, searchQuery, selectedPatient);
+        }
+        setCurrentPage(1);
+        // fetchStudies(1, searchQuery, selectedPatient);
+      } else {
+        fetchStudies(currentPage, searchQuery, selectedPatient);
+      }
     }
-  }, [selectedPatient, isAuthenticated, currentPage, searchQuery]);
+  }, [isAuthenticated, currentPage, searchQuery]);
+
+
 
   // Set loading state based on AuthContext
   // useEffect(() => {
@@ -106,6 +121,7 @@ export default function AdminPortal() {
 
   const fetchStudies = async (page = currentPage, searchQuery = searchQuery, patientFilter = selectedPatient) => {
     try {
+
       setLoading(true);
       setError(null);
 
@@ -122,6 +138,7 @@ export default function AdminPortal() {
         patient: patientFilter || ''
       });
 
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -133,7 +150,7 @@ export default function AdminPortal() {
       }
 
       const data = await response.json();
-      console.log('Database studies loaded:', data);
+      console.log('✅ Database studies loaded:', data.message);
 
       setStudies(data.studies || {});
 
@@ -144,6 +161,7 @@ export default function AdminPortal() {
       }
 
     } catch (err) {
+      console.error('❌ fetchStudies error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -191,7 +209,7 @@ export default function AdminPortal() {
   // Reset to first page when search query changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedPatient]);
+  }, [selectedPatient]);
 
   const header = (
     <>
@@ -233,7 +251,12 @@ export default function AdminPortal() {
               onChange={(e) => setSearchInput(e.target.value)}
               className="w-80 px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            {searchInput && (
+            {searchLoading && (
+              <div className="absolute right-8 top-1/2 transform -translate-y-1/2 text-blue-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              </div>
+            )}
+            {searchInput && !searchLoading && (
               <button
                 onClick={() => {
                   setSearchInput('');

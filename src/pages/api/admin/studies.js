@@ -20,8 +20,6 @@ async function handler(req, res) {
     const limitNum = parseInt(limit);
     const offset = (pageNum - 1) * limitNum;
 
-    console.log(`📊 Admin fetching DICOM studies from database - Page ${pageNum}, Limit ${limitNum}, Search: "${search}", Patient: "${patient}"`);
-
     // Build query conditions
     const whereConditions = {
       active: true // Only get active studies
@@ -71,7 +69,7 @@ async function handler(req, res) {
               },
               {
                 lastName: {
-                  contains: searchQuery,
+                  contains: searchQuery
                 }
               }
             ]
@@ -80,33 +78,39 @@ async function handler(req, res) {
       ];
     }
 
-    // Get total count for pagination
-    const totalStudies = await prisma.dicomStudy.count({
-      where: whereConditions
-    });
+    let totalStudies, dbStudies, totalPages;
 
-    const totalPages = Math.ceil(totalStudies / limitNum);
+    try {
+      // Get total count for pagination
+      totalStudies = await prisma.dicomStudy.count({
+        where: whereConditions
+      });
 
-    // Fetch paginated studies from database with patient relationship
-    const dbStudies = await prisma.dicomStudy.findMany({
-      where: whereConditions,
-      include: {
-        patient: {
-          select: {
-            firstName: true,
-            lastName: true,
-            urn: true
+      totalPages = Math.ceil(totalStudies / limitNum);
+
+      // Fetch paginated studies from database with patient relationship
+      dbStudies = await prisma.dicomStudy.findMany({
+        where: whereConditions,
+        include: {
+          patient: {
+            select: {
+              firstName: true,
+              lastName: true,
+              urn: true
+            }
           }
-        }
-      },
-      orderBy: [
-        { createdAt: 'desc' }
-      ],
-      skip: offset,
-      take: limitNum
-    });
-
-    console.log(`📚 Found ${totalStudies} total studies, returning ${dbStudies.length} for page ${pageNum}/${totalPages}`);
+        },
+        orderBy: [
+          { createdAt: 'desc' }
+        ],
+        skip: offset,
+        take: limitNum
+      });
+    } catch (dbError) {
+      console.error('❌ Database query error:', dbError);
+      console.error('❌ Where conditions that caused error:', JSON.stringify(whereConditions, null, 2));
+      throw new Error(`Database query failed: ${dbError.message}`);
+    }
 
     // Transform database results to match the expected format
     const studies = {};
@@ -160,7 +164,6 @@ async function handler(req, res) {
       source: 'database'
     };
 
-    console.log(`✅ Returning ${Object.keys(studies).length} studies for page ${pageNum}/${totalPages}`);
     res.status(200).json(response);
 
   } catch (error) {
