@@ -82,6 +82,10 @@ async function processDicomStudies(folderName, sessionId) {
           continue;
         }
 
+        // Calculate total files and series
+        const totalFiles = study.files ? study.files.length : 0;
+        const totalSeries = study.series ? Object.keys(study.series).length : 0;
+
         // Prepare study data for database
         const studyData = {
           studyInstanceUID,
@@ -95,6 +99,8 @@ async function processDicomStudies(folderName, sessionId) {
           firstFile: study.firstFile,
           uploadedPatientId,
           uploadedFolderName: folderName,
+          totalFiles,
+          totalSeries,
           active: true
         };
 

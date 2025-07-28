@@ -125,6 +125,8 @@ async function handler(req, res) {
         firstFile: dbStudy.firstFile,
         uploadedPatientId: dbStudy.uploadedPatientId,
         uploadedFolderName: dbStudy.uploadedFolderName,
+        totalFiles: dbStudy.totalFiles || 0,
+        totalSeries: dbStudy.totalSeries || 0,
 
         // Add patient information from database relationship
         uploadedPatientName: dbStudy.patient

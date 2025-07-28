@@ -72,6 +72,8 @@ model DicomStudy {
   firstFile          String   @map("first_file") @db.VarChar(500)
   uploadedPatientId  String   @map("uploaded_patient_id") @db.VarChar(10)
   uploadedFolderName String   @map("uploaded_folder_name") @db.VarChar(255)
+  totalFiles         Int?     @map("total_files") // Total number of DICOM files in study
+  totalSeries        Int?     @map("total_series") // Total number of series in study
   active             Boolean  @default(true)
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")

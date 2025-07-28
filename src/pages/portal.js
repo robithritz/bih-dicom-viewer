@@ -529,8 +529,8 @@ export default function AdminPortal() {
                     <p><strong>Study Date:</strong> {study.studyDate || 'N/A'}</p>
                     <p><strong>Modality:</strong> {study.modality || 'N/A'}</p>
                     <p><strong>Description:</strong> {study.studyDescription || 'N/A'}</p>
-                    <p><strong>Files:</strong> {study.files?.length || 0}</p>
-                    <p><strong>Series:</strong> {Object.keys(study.series || {}).length}</p>
+                    <p><strong>Files:</strong> {study.totalFiles || 0}</p>
+                    <p><strong>Series:</strong> {study.totalSeries || 0}</p>
                   </div>
                   <Link
                     href={`/admin/viewer/${encodeURIComponent(study.firstFile)}`}
