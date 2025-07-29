@@ -71,17 +71,6 @@ async function processDicomStudies(folderName, sessionId) {
           firstFile: study.firstFile
         });
 
-        // Check if study already exists
-        const existingStudy = await prismaClient.dicomStudy.findUnique({
-          where: { studyInstanceUID }
-        });
-
-        if (existingStudy) {
-          console.log(`⏭️ Study already exists: ${studyInstanceUID}`);
-          studiesSkipped++;
-          continue;
-        }
-
         // Calculate total files and series
         const totalFiles = study.files ? study.files.length : 0;
         const totalSeries = study.series ? Object.keys(study.series).length : 0;
@@ -104,12 +93,27 @@ async function processDicomStudies(folderName, sessionId) {
           active: true
         };
 
-        console.log(`💾 Inserting study data:`, studyData);
-
-        // Insert study into database
-        const createdStudy = await prismaClient.dicomStudy.create({
-          data: studyData
+        // Check if study already exists
+        const existingStudy = await prismaClient.dicomStudy.findUnique({
+          where: { studyInstanceUID }
         });
+
+        let createdStudy = {};
+        if (existingStudy) {
+          createdStudy = await prismaClient.dicomStudy.update({
+            where: { studyInstanceUID },
+            data: {
+
+              ...studyData,
+              updatedAt: new Date()
+            }
+          });
+        } else {
+          // Insert study into database
+          createdStudy = await prismaClient.dicomStudy.create({
+            data: studyData
+          });
+        }
 
         console.log(`✅ Saved study to database with ID: ${createdStudy.id}, UID: ${studyInstanceUID}`);
         studiesProcessed++;
