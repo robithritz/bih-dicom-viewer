@@ -145,10 +145,20 @@ export default function PatientPortal() {
                   <h3>{study.patientName || 'Medical Study'}</h3>
                   <div className="study-details">
                     <p><strong>Study Date:</strong> {study.studyDate || 'N/A'}</p>
+                    <p><strong>Patient ID:</strong> {study.patientID || 'N/A'}</p>
+                    {(() => {
+                      // Extract episode ID from folder name or firstFile path
+                      const firstFile = study.firstFile || '';
+                      const folderName = firstFile.includes('/') ? firstFile.split('/')[0] : '';
+                      const episodeId = folderName.includes('_') ? folderName.split('_').slice(1).join('_') : null;
+                      return episodeId ? (
+                        <p><strong>Episode ID:</strong> {episodeId}</p>
+                      ) : null;
+                    })()}
                     <p><strong>Modality:</strong> {study.modality || 'N/A'}</p>
                     <p><strong>Description:</strong> {study.studyDescription || 'N/A'}</p>
-                    <p><strong>Files:</strong> {study.files?.length || 0}</p>
-                    <p><strong>Series:</strong> {Object.keys(study.series || {}).length}</p>
+                    <p><strong>Files:</strong> {study.totalFiles || 0}</p>
+                    <p><strong>Series:</strong> {study.totalSeries || 0}</p>
                   </div>
                   <Link
                     href={`/viewer/${encodeURIComponent(study.firstFile)}`}

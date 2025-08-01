@@ -37,6 +37,8 @@ export default async function handler(req, res) {
       patient: {
         id: patient.idPatients.toString(),
         urn: patient.urn,
+        isMultiPatient: patient.isMultiPatient,
+        multiUrn: patient.multiUrn,
         email: patient.email,
         patientId: patient.psid,
         firstName: patient.firstName,
