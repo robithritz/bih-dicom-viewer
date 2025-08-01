@@ -11,7 +11,19 @@ export const getPatientByEmail = async (email) => {
       where: { email: normalizedEmail }
     });
 
-    return patient;
+    const multiPatients = await prisma.patient.findMany({
+      where: { email: normalizedEmail }
+    });
+
+    if (multiPatients.length > 1) {
+      console.warn('Multiple patients found for email:', normalizedEmail);
+    }
+
+    return {
+      ...patient,
+      isMultiPatient: multiPatients.length > 1,
+      multiUrn: multiPatients.map(p => p.urn)
+    };
   } catch (error) {
     console.error('Error getting patient by email:', error);
     return null;

@@ -37,6 +37,8 @@ export const verifyPatientSession = async (req) => {
     return {
       id: patient.idPatients.toString(),
       urn: patient.urn,
+      isMultiPatient: patient.isMultiPatient,
+      multiUrn: patient.multiUrn,
       email: patient.email,
       patientId: patient.psid, // Use psid as patient ID
       firstName: patient.firstName,
@@ -142,7 +144,8 @@ export const validatePatientFileAccess = (req, filename) => {
     patientIdFromPath = folderNameFromPath.split('_')[0]; // Get patient ID part before underscore
 
     // Validate that the patient ID from folder matches authenticated patient
-    if (patientIdFromPath !== patient.urn) {
+    const multiUrn = patient.multiUrn || [];
+    if (patientIdFromPath !== patient.urn && !multiUrn.includes(patientIdFromPath)) {
       return {
         isValid: false,
         error: 'Access denied: Patient ID mismatch'
