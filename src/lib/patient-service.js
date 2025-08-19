@@ -19,6 +19,10 @@ export const getPatientByEmail = async (email) => {
       console.warn('Multiple patients found for email:', normalizedEmail);
     }
 
+    if (!patient) {
+      return null;
+    }
+
     return {
       ...patient,
       isMultiPatient: multiPatients.length > 1,
