@@ -32,7 +32,7 @@ export default async function handler(req, res) {
             where: { id: decoded.id }
         });
 
-        if (!user || user.role !== 'superadmin') {
+        if (!user || user.role !== 'dicomadmin') {
             return res.status(403).json({ error: 'Access denied' });
         }
 

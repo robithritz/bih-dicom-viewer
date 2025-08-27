@@ -5,234 +5,234 @@ import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function UploadHistoryPage() {
-    const router = useRouter();
-    const { user, isAuthenticated, loading: authLoading, isInitialized } = useAuth();
-    const [uploadHistory, setUploadHistory] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [deletingFolder, setDeletingFolder] = useState(null);
+  const router = useRouter();
+  const { user, isAuthenticated, loading: authLoading, isInitialized } = useAuth();
+  const [uploadHistory, setUploadHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deletingFolder, setDeletingFolder] = useState(null);
 
-    useEffect(() => {
-        console.log("Upload History - Auth state check:", {
-            authLoading,
-            isAuthenticated,
-            isInitialized,
-            user: user ? { role: user.role, email: user.email, id: user.id } : null,
-            hasAdminToken: !!localStorage.getItem('admin-auth-token')
+  useEffect(() => {
+    console.log("Upload History - Auth state check:", {
+      authLoading,
+      isAuthenticated,
+      isInitialized,
+      user: user ? { role: user.role, email: user.email, id: user.id } : null,
+      hasAdminToken: !!localStorage.getItem('admin-auth-token')
+    });
+
+    // Only redirect if auth is fully initialized and user is not properly authenticated
+    if (isInitialized && !authLoading) {
+      if (!isAuthenticated || !user || user.role !== 'dicomadmin') {
+        console.log("Upload History - Redirecting to portal - auth failed:", {
+          isAuthenticated,
+          hasUser: !!user,
+          userRole: user?.role
         });
+        router.replace('/portal');
+        return;
+      } else {
+        console.log("Upload History - Authentication successful, user can access upload history page");
+        fetchUploadHistory();
+      }
+    }
+  }, [user, isAuthenticated, authLoading, isInitialized, router]);
 
-        // Only redirect if auth is fully initialized and user is not properly authenticated
-        if (isInitialized && !authLoading) {
-            if (!isAuthenticated || !user || user.role !== 'superadmin') {
-                console.log("Upload History - Redirecting to portal - auth failed:", {
-                    isAuthenticated,
-                    hasUser: !!user,
-                    userRole: user?.role
-                });
-                router.replace('/portal');
-                return;
-            } else {
-                console.log("Upload History - Authentication successful, user can access upload history page");
-                fetchUploadHistory();
-            }
+  const fetchUploadHistory = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem('admin-auth-token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/upload-history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-    }, [user, isAuthenticated, authLoading, isInitialized, router]);
+      });
 
-    const fetchUploadHistory = async () => {
-        try {
-            setLoading(true);
-            setError(null);
+      if (!response.ok) {
+        throw new Error('Failed to fetch upload history');
+      }
 
-            const token = localStorage.getItem('admin-auth-token');
-            if (!token) {
-                throw new Error('No authentication token found');
-            }
+      const data = await response.json();
+      setUploadHistory(data.uploadHistory || []);
+    } catch (err) {
+      console.error('❌ fetchUploadHistory error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/upload-history`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch upload history');
-            }
-
-            const data = await response.json();
-            setUploadHistory(data.uploadHistory || []);
-        } catch (err) {
-            console.error('❌ fetchUploadHistory error:', err);
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDeleteFolder = async (folderName) => {
-        if (!confirm(`Are you sure you want to delete the folder "${folderName}"? This will permanently delete all DICOM files in this folder and mark all related studies as inactive.`)) {
-            return;
-        }
-
-        try {
-            setDeletingFolder(folderName);
-            setError(null);
-
-            const token = localStorage.getItem('admin-auth-token');
-            if (!token) {
-                throw new Error('No authentication token found');
-            }
-
-            const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/delete-upload-folder`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ folderName })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to delete folder');
-            }
-
-            const data = await response.json();
-            alert(data.message);
-
-            // Refresh the upload history
-            await fetchUploadHistory();
-        } catch (err) {
-            console.error('❌ handleDeleteFolder error:', err);
-            setError(err.message);
-            alert(`Error deleting folder: ${err.message}`);
-        } finally {
-            setDeletingFolder(null);
-        }
-    };
-
-    // Show loading while auth is initializing
-    if (!isInitialized || authLoading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Initializing authentication...</p>
-                </div>
-            </div>
-        );
+  const handleDeleteFolder = async (folderName) => {
+    if (!confirm(`Are you sure you want to delete the folder "${folderName}"? This will permanently delete all DICOM files in this folder and mark all related studies as inactive.`)) {
+      return;
     }
 
-    // Show loading if user is not authenticated (will redirect)
-    if (!isAuthenticated || !user || user.role !== 'superadmin') {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Checking permissions...</p>
-                </div>
-            </div>
-        );
-    }
+    try {
+      setDeletingFolder(folderName);
+      setError(null);
 
+      const token = localStorage.getItem('admin-auth-token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/delete-upload-folder`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ folderName })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete folder');
+      }
+
+      const data = await response.json();
+      alert(data.message);
+
+      // Refresh the upload history
+      await fetchUploadHistory();
+    } catch (err) {
+      console.error('❌ handleDeleteFolder error:', err);
+      setError(err.message);
+      alert(`Error deleting folder: ${err.message}`);
+    } finally {
+      setDeletingFolder(null);
+    }
+  };
+
+  // Show loading while auth is initializing
+  if (!isInitialized || authLoading) {
     return (
-        <Layout>
-            <div className="upload-history-page">
-                <div className="upload-history-header">
-                    <h1>Upload History</h1>
-                    <p>View and manage uploaded DICOM folders</p>
-                    <div className="header-actions">
-                        <Link href="/portal" className="back-button">
-                            ← Back to Admin Portal
-                        </Link>
-                        <Link href="/admin/upload" className="upload-button">
-                            📁 Upload New Files
-                        </Link>
-                    </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Initializing authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if user is not authenticated (will redirect)
+  if (!isAuthenticated || !user || user.role !== 'dicomadmin') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="upload-history-page">
+        <div className="upload-history-header">
+          <h1>Upload History</h1>
+          <p>View and manage uploaded DICOM folders</p>
+          <div className="header-actions">
+            <Link href="/portal" className="back-button">
+              ← Back to Admin Portal
+            </Link>
+            <Link href="/admin/upload" className="upload-button">
+              📁 Upload New Files
+            </Link>
+          </div>
+        </div>
+
+        {error && (
+          <div className="error-message">
+            <p>❌ {error}</p>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="loading-container">
+            <div className="loading-spinner">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+            <p>Loading upload history...</p>
+          </div>
+        ) : uploadHistory.length === 0 ? (
+          <div className="no-history">
+            <h2>No Upload History Found</h2>
+            <p>No DICOM folders have been uploaded yet.</p>
+            <Link href="/admin/upload" className="upload-link">
+              📁 Upload Your First Files
+            </Link>
+          </div>
+        ) : (
+          <div className="history-list">
+            {uploadHistory.map((folder) => (
+              <div key={folder.folderName} className="history-item">
+                <div className="folder-info">
+                  <h3 className="folder-name">{folder.folderName}</h3>
+                  <div className="folder-stats">
+                    <span className="stat">
+                      <strong>Studies:</strong> {folder.studyCount}
+                    </span>
+                    <span className="stat">
+                      <strong>Total Files:</strong> {folder.totalFiles}
+                    </span>
+                    <span className="stat">
+                      <strong>Patient ID:</strong> {folder.patientId}
+                    </span>
+                    <span className="stat">
+                      <strong>Uploaded:</strong> {new Date(folder.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="folder-studies">
+                    <h4>Studies in this folder:</h4>
+                    <ul>
+                      {folder.studies.map((study) => (
+                        <li key={study.id} className={!study.active ? 'inactive-study' : ''}>
+                          <span className="study-name">
+                            {study.patientName || 'Unknown Patient'} - {study.studyDescription || 'No Description'}
+                          </span>
+                          <span className="study-date">
+                            {study.studyDate ? new Date(study.studyDate.substring(0, 4) + "-" + study.studyDate.substring(4, 6) + "-" + study.studyDate.substring(6, 8)).toLocaleDateString() : 'No Date'}
+                          </span>
+                          <span className="study-modality">{study.modality || 'N/A'}</span>
+                          {!study.active && <span className="inactive-badge">Inactive</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
+                <div className="folder-actions">
+                  <button
+                    onClick={() => handleDeleteFolder(folder.folderName)}
+                    disabled={deletingFolder === folder.folderName}
+                    className="delete-button"
+                  >
+                    {deletingFolder === folder.folderName ? (
+                      <>
+                        <div className="button-spinner"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        🗑️ Delete Folder
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-                {error && (
-                    <div className="error-message">
-                        <p>❌ {error}</p>
-                    </div>
-                )}
-
-                {loading ? (
-                    <div className="loading-container">
-                        <div className="loading-spinner">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                        </div>
-                        <p>Loading upload history...</p>
-                    </div>
-                ) : uploadHistory.length === 0 ? (
-                    <div className="no-history">
-                        <h2>No Upload History Found</h2>
-                        <p>No DICOM folders have been uploaded yet.</p>
-                        <Link href="/admin/upload" className="upload-link">
-                            📁 Upload Your First Files
-                        </Link>
-                    </div>
-                ) : (
-                    <div className="history-list">
-                        {uploadHistory.map((folder) => (
-                            <div key={folder.folderName} className="history-item">
-                                <div className="folder-info">
-                                    <h3 className="folder-name">{folder.folderName}</h3>
-                                    <div className="folder-stats">
-                                        <span className="stat">
-                                            <strong>Studies:</strong> {folder.studyCount}
-                                        </span>
-                                        <span className="stat">
-                                            <strong>Total Files:</strong> {folder.totalFiles}
-                                        </span>
-                                        <span className="stat">
-                                            <strong>Patient ID:</strong> {folder.patientId}
-                                        </span>
-                                        <span className="stat">
-                                            <strong>Uploaded:</strong> {new Date(folder.createdAt).toLocaleString()}
-                                        </span>
-                                    </div>
-                                    <div className="folder-studies">
-                                        <h4>Studies in this folder:</h4>
-                                        <ul>
-                                            {folder.studies.map((study) => (
-                                                <li key={study.id} className={!study.active ? 'inactive-study' : ''}>
-                                                    <span className="study-name">
-                                                        {study.patientName || 'Unknown Patient'} - {study.studyDescription || 'No Description'}
-                                                    </span>
-                                                    <span className="study-date">
-                                                        {study.studyDate ? new Date(study.studyDate.substring(0, 4) + "-" + study.studyDate.substring(4, 6) + "-" + study.studyDate.substring(6, 8)).toLocaleDateString() : 'No Date'}
-                                                    </span>
-                                                    <span className="study-modality">{study.modality || 'N/A'}</span>
-                                                    {!study.active && <span className="inactive-badge">Inactive</span>}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div className="folder-actions">
-                                    <button
-                                        onClick={() => handleDeleteFolder(folder.folderName)}
-                                        disabled={deletingFolder === folder.folderName}
-                                        className="delete-button"
-                                    >
-                                        {deletingFolder === folder.folderName ? (
-                                            <>
-                                                <div className="button-spinner"></div>
-                                                Deleting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                🗑️ Delete Folder
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <style jsx>{`
+        <style jsx>{`
           .upload-history-page {
             min-height: 100vh;
             background-color: #f5f5f5;
@@ -520,7 +520,7 @@ export default function UploadHistoryPage() {
             }
           }
         `}</style>
-            </div>
-        </Layout>
-    );
+      </div>
+    </Layout>
+  );
 }

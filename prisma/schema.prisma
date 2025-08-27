@@ -109,4 +109,5 @@ enum UserRole {
   superadmin
   backoffice
   kitchen
+  dicomadmin
 }

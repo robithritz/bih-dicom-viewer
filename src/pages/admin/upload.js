@@ -35,7 +35,7 @@ export default function UploadPage() {
 
     // Only redirect if auth is fully initialized and user is not properly authenticated
     if (isInitialized && !authLoading) {
-      if (!isAuthenticated || !user || user.role !== 'superadmin') {
+      if (!isAuthenticated || !user || user.role !== 'dicomadmin') {
         console.log("Admin Upload - Redirecting to portal - auth failed:", {
           isAuthenticated,
           hasUser: !!user,
@@ -66,7 +66,7 @@ export default function UploadPage() {
   }
 
   // Show loading if user is not authenticated (will redirect)
-  if (!isAuthenticated || !user || user.role !== 'superadmin') {
+  if (!isAuthenticated || !user || user.role !== 'dicomadmin') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

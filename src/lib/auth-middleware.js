@@ -208,7 +208,7 @@ export const requireAdminAuth = (handler) => {
 
       console.log(user);
 
-      if (!user || user.role !== 'superadmin') {
+      if (!user || user.role !== 'dicomadmin') {
         return res.status(403).json({ error: 'Admin privileges required' });
       }
 

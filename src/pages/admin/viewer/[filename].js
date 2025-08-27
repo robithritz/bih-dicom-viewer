@@ -17,7 +17,7 @@ export default function AdminViewerPage() {
   // Check if user is admin
   useEffect(() => {
     console.log("kesini", { authLoading, isAuthenticated, user });
-    if (!authLoading && (!isAuthenticated || !user || user.role !== 'superadmin')) {
+    if (!authLoading && (!isAuthenticated || !user || user.role !== 'dicomadmin')) {
       router.replace('/portal');
       return;
     }
@@ -38,7 +38,7 @@ export default function AdminViewerPage() {
     );
   }
 
-  if (!isAuthenticated || !user || user.role !== 'superadmin') {
+  if (!isAuthenticated || !user || user.role !== 'dicomadmin') {
     return (
       <div style={{
         display: 'flex',
