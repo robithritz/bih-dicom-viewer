@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     console.log('OTP session created:', { success: !!otpSession.sessionId, sessionId: otpSession.sessionId });
 
     // Send OTP email
-    // await sendOTPEmail(normalizedEmail, otpSession.otp, patient.psid);
+    await sendOTPEmail(normalizedEmail, otpSession.otp, patient.psid);
 
     res.status(200).json({
       success: true,
