@@ -19,7 +19,15 @@ async function handler(req, res) {
           OR: [
             { urn: { contains: query } },
             { psid: { contains: query } },
-            { lastName: { contains: query } },
+            // if query contains space, split by space and search by first and last name
+            ...(query.includes(' ') ? [
+              {
+                AND: [
+                  { firstName: { contains: query.split(' ')[0] } },
+                  { lastName: { contains: query.split(' ')[1] } }
+                ]
+              }
+            ] : []),
             { firstName: { contains: query } },
             { email: { contains: query } }
           ]
