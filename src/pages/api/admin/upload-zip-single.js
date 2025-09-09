@@ -27,7 +27,7 @@ if (!fs.existsSync(TEMP_DIR)) {
 /**
  * Process DICOM studies and save to database
  */
-async function processDicomStudies(folderName) {
+async function processDicomStudies(folderName, uploadedBy) {
   let prismaClient = null;
 
   try {
@@ -112,7 +112,10 @@ async function processDicomStudies(folderName) {
         } else {
           // Insert study into database
           createdStudy = await prismaClient.dicomStudy.create({
-            data: studyData
+            data: {
+              ...studyData,
+              uploadedBy: uploadedBy || null
+            }
           });
         }
 
@@ -213,7 +216,8 @@ async function handleSingleZipUpload(req, res) {
     let studyProcessingResult = { studiesProcessed: 0, studiesSkipped: 0 };
     try {
       console.log(`📊 Starting DICOM study processing for folder: ${finalFolderName}`);
-      studyProcessingResult = await processDicomStudies(finalFolderName);
+      const uploadedBy = (req.user?.name || req.user?.email || 'unknown');
+      studyProcessingResult = await processDicomStudies(finalFolderName, uploadedBy);
       console.log(`✅ DICOM study processing completed: ${studyProcessingResult.studiesProcessed} processed, ${studyProcessingResult.studiesSkipped} skipped`);
     } catch (studyError) {
       console.error('❌ DICOM study processing failed:', studyError);

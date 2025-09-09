@@ -59,6 +59,7 @@ export const requireAdminAuth = (handler) => {
 
     // Add user info to request object
     req.user = user;
+    req.admin = user;
 
     return handler(req, res);
   };

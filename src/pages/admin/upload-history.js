@@ -190,6 +190,9 @@ export default function UploadHistoryPage() {
                     <span className="stat">
                       <strong>Uploaded:</strong> {new Date(folder.createdAt).toLocaleString()}
                     </span>
+                    <span className="stat">
+                      <strong>Uploaded by:</strong> {folder.studies[0]?.uploadedBy || 'Unknown'}
+                    </span>
                   </div>
                   <div className="folder-studies">
                     <h4>Studies in this folder:</h4>

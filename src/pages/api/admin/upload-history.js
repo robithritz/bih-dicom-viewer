@@ -77,6 +77,7 @@ export default async function handler(req, res) {
                         modality: true,
                         totalFiles: true,
                         totalSeries: true,
+                        uploadedBy: true,
                         active: true,
                         createdAt: true
                     },

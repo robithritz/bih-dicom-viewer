@@ -535,7 +535,7 @@ export default function AdminPortal() {
                     />
                   ) : (
                     <div className="thumbnail-placeholder">
-                      📊 DICOM | {study.uploadedPatientId} - {study.uploadedPatientName}
+                      📊 DICOM | {study.uploadedPatientId} - {study.uploadedPatientName} | {study.patientEmail}
                     </div>
                   )}
                 </div>

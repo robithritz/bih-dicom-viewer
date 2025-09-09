@@ -20,7 +20,7 @@ if (!fs.existsSync(DICOM_DIR)) {
 /**
  * Process DICOM studies and save to database
  */
-async function processDicomStudies(folderName, sessionId) {
+async function processDicomStudies(folderName, sessionId, uploadedBy) {
   let prismaClient = null;
 
   try {
@@ -105,13 +105,17 @@ async function processDicomStudies(folderName, sessionId) {
             data: {
 
               ...studyData,
+              uploadedBy: uploadedBy || null,
               updatedAt: new Date()
             }
           });
         } else {
           // Insert study into database
           createdStudy = await prismaClient.dicomStudy.create({
-            data: studyData
+            data: {
+              ...studyData,
+              uploadedBy: uploadedBy || null
+            }
           });
         }
 
@@ -189,7 +193,7 @@ async function assembleZipFile(sessionId, session) {
 /**
  * Extract ZIP file and move DICOM files
  */
-async function extractZipFile(zipPath, folderName, sessionId) {
+async function extractZipFile(zipPath, folderName, sessionId, uploadedBy) {
   // Check if folder already exists and create unique name if needed
   let finalFolderName = folderName;
   let targetDir = path.join(DICOM_DIR, finalFolderName);
@@ -350,7 +354,7 @@ async function extractZipFile(zipPath, folderName, sessionId) {
         // Process DICOM studies and save to database
         console.log(`🔄 Starting DICOM study processing for folder: ${finalFolderName}`);
 
-        processDicomStudies(finalFolderName, sessionId)
+        processDicomStudies(finalFolderName, sessionId, uploadedBy)
           .then((processingResult) => {
             console.log(`✅ DICOM processing completed:`, processingResult);
 
@@ -482,6 +486,9 @@ async function handleFinalizeZipUpload(req, res) {
       message: 'Combining uploaded chunks...'
     });
 
+    // Determine uploader name from authenticated admin
+    const uploadedBy = (req.admin?.email || req.admin?.name || 'unknown');
+
     // Start extraction process asynchronously
     setImmediate(async () => {
       try {
@@ -489,7 +496,7 @@ async function handleFinalizeZipUpload(req, res) {
         const zipPath = await assembleZipFile(sessionId, uploadSession);
 
         // Extract and process
-        const result = await extractZipFile(zipPath, folderName, sessionId);
+        const result = await extractZipFile(zipPath, folderName, sessionId, uploadedBy);
 
         // Clean up temporary ZIP file
         try {

@@ -96,7 +96,8 @@ async function handler(req, res) {
             select: {
               firstName: true,
               lastName: true,
-              urn: true
+              urn: true,
+              email: true
             }
           }
         },
@@ -121,6 +122,7 @@ async function handler(req, res) {
         studyInstanceUID: dbStudy.studyInstanceUID,
         patientName: dbStudy.patientName,
         patientID: dbStudy.patientID,
+        patientEmail: dbStudy.patient ? dbStudy.patient.email : null,
         studyDate: dbStudy.studyDate,
         studyTime: dbStudy.studyTime,
         studyDescription: dbStudy.studyDescription,
