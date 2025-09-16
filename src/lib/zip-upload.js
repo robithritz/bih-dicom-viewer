@@ -151,6 +151,32 @@ async function uploadZipFileSingle(zipFile, folderName, progressCallback) {
       'Authorization': `Bearer ${token}`
     };
 
+    // WAF precheck: inspect head of file before hitting API
+    try {
+      const headBlob = zipFile.slice(0, 4096);
+      const headBuf = await headBlob.arrayBuffer();
+      const bytes = new Uint8Array(headBuf);
+      const decoder = new TextDecoder('latin1');
+      const asciiRaw = decoder.decode(bytes);
+      const asciiPrintable = asciiRaw.replace(/[^ -~]/g, '.');
+      const hexPreview = Array.from(bytes.subarray(0, 128))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      const countOrOr = (asciiPrintable.match(/\|\|/g) || []).length;
+      const countAndAnd = (asciiPrintable.match(/&&/g) || []).length;
+
+      console.log('WAF PRECHECK: ZIP head preview', {
+        fileName: zipFile.name,
+        sizeBytes: zipFile.size,
+        tokenCounts: { '||': countOrOr, '&&': countAndAnd },
+        headAsciiPreview: asciiPrintable.slice(0, 256),
+        headHexPreview: hexPreview
+      });
+    } catch (preErr) {
+      console.warn('WAF PRECHECK: failed to preview zip head', preErr);
+    }
+
     progressCallback({ type: 'chunk', stage: 'Uploading file...', percentage: 30 });
 
     const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/upload-zip-single', {
