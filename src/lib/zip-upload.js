@@ -152,6 +152,7 @@ async function uploadZipFileSingle(zipFile, folderName, progressCallback) {
     };
 
     // WAF precheck: inspect head of file before hitting API
+    let wafSensitive = false;
     try {
       const headBlob = zipFile.slice(0, 4096);
       const headBuf = await headBlob.arrayBuffer();
@@ -165,16 +166,23 @@ async function uploadZipFileSingle(zipFile, folderName, progressCallback) {
 
       const countOrOr = (asciiPrintable.match(/\|\|/g) || []).length;
       const countAndAnd = (asciiPrintable.match(/&&/g) || []).length;
+      wafSensitive = (countOrOr > 0 || countAndAnd > 0);
 
       console.log('WAF PRECHECK: ZIP head preview', {
         fileName: zipFile.name,
         sizeBytes: zipFile.size,
         tokenCounts: { '||': countOrOr, '&&': countAndAnd },
         headAsciiPreview: asciiPrintable.slice(0, 256),
-        headHexPreview: hexPreview
+        headHexPreview: hexPreview,
+        wafSensitive
       });
     } catch (preErr) {
       console.warn('WAF PRECHECK: failed to preview zip head', preErr);
+    }
+
+    // If sensitive tokens detected, fall back to Base64-safe upload path
+    if (wafSensitive) {
+      return await uploadZipFileSingleBase64(zipFile, folderName, progressCallback);
     }
 
     progressCallback({ type: 'chunk', stage: 'Uploading file...', percentage: 30 });
@@ -196,6 +204,7 @@ async function uploadZipFileSingle(zipFile, folderName, progressCallback) {
 
     progressCallback({ type: 'chunk', stage: 'Complete', percentage: 100 });
 
+
     return result;
 
   } catch (error) {
@@ -203,6 +212,58 @@ async function uploadZipFileSingle(zipFile, folderName, progressCallback) {
     throw error;
   }
 }
+
+/**
+ * Upload ZIP using Base64 JSON payload to avoid WAF token inspection issues
+ */
+async function uploadZipFileSingleBase64(zipFile, folderName, progressCallback) {
+  try {
+    progressCallback({ type: 'chunk', stage: 'Encoding file (base64)...', percentage: 20 });
+
+    // Read as DataURL to get base64 in browsers safely
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(zipFile);
+    });
+    const base64 = typeof dataUrl === 'string' ? (dataUrl.split(',')[1] || '') : '';
+
+    const token = localStorage.getItem('admin-auth-token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+
+    progressCallback({ type: 'chunk', stage: 'Uploading (base64)...', percentage: 40 });
+
+    const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/upload-zip-base64', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        folderName,
+        zipBase64: base64,
+        fileName: zipFile.name,
+        sizeBytes: zipFile.size
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    progressCallback({ type: 'chunk', stage: 'Processing...', percentage: 90 });
+
+    const result = await response.json();
+    progressCallback({ type: 'chunk', stage: 'Complete', percentage: 100 });
+    return result;
+  } catch (error) {
+    console.error('Base64 single upload failed:', error);
+    throw error;
+  }
+}
+
 
 /**
  * Upload ZIP file using chunked upload
@@ -255,6 +316,8 @@ export async function uploadZipFileChunked(zipFile, folderName, progressCallback
         await new Promise(resolve => setTimeout(resolve, ZIP_CHUNK_CONFIG.CHUNK_DELAY));
       }
     }
+
+
 
     // Finalize upload and trigger extraction
     progressCallback({
