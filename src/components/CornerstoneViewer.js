@@ -30,6 +30,21 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       }
     }
   }, []);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    if (mq.addEventListener) mq.addEventListener('change', update);
+    else mq.addListener(update);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', update);
+      else mq.removeListener(update);
+    };
+  }, []);
+
 
   const [viewport, setViewport] = useState(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
@@ -1242,7 +1257,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
 
           {/* Series File Scroll Bar (for large series like 451 files) */}
-          {seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+          {!isMobile && seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
             <div className="absolute left-2 top-16 bottom-16 w-6 z-40">
               <div className="relative h-full bg-gray-800 bg-opacity-50 rounded-full">
                 {/* Scroll track */}
@@ -1279,6 +1294,113 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                   {currentSeriesFileIndex + 1} / {seriesData[currentSeriesIndex]?.files.length}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Mobile Series File Navigation (Up/Down arrows) */}
+          {false && isMobile && seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
+              {/* Previous file in series */}
+              <button
+                onClick={goToPreviousFileInSeries}
+                disabled={currentSeriesFileIndex === 0}
+                className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === 0
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                title="Previous file in series"
+              >
+                F3333 
+                 0 0 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+                 0
+              </button>
+
+              {/* Next file in series */}
+              <button
+                onClick={goToNextFileInSeries}
+                disabled={currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)}
+                className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                title="Next file in series"
+              >
+                 0
+              </button>
+            </div>
+          )}
+
+
+
+          {/* Mobile Series File Navigation (clean buttons) */}
+          {isMobile && seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
+              <button
+                onClick={() => navigateToFileInSeries(currentSeriesFileIndex - 1)}
+                disabled={currentSeriesFileIndex === 0}
+                className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === 0
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                title="Previous file in series"
+                aria-label="Previous file in series"
+              >
+                ↑
+              </button>
+
+              <button
+                onClick={() => navigateToFileInSeries(currentSeriesFileIndex + 1)}
+                disabled={currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)}
+                className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                title="Next file in series"
+                aria-label="Next file in series"
+              >
+                ↓
+              </button>
             </div>
           )}
 
