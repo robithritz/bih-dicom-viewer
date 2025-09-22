@@ -25,7 +25,7 @@ export default function Toolbar({
           {tools.map(tool => (
             <button
               key={tool.id}
-              className={`tool-btn ${currentTool === tool.id ? 'active' : ''}`}
+              className={`tool-btn tool-${tool.id} ${currentTool === tool.id ? 'active' : ''}`}
               onClick={() => onToolChange(tool.id)}
               title={tool.title}
             >
@@ -81,9 +81,8 @@ export default function Toolbar({
 
       <style jsx>{`
         @media (max-width: 768px) {
-          .transform-group {
-            display: none;
-          }
+          .transform-group { display: none; }
+          .tool-length, .tool-angle, .tool-roi { display: none; }
         }
       `}</style>
 
