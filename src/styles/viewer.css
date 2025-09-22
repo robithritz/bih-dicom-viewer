@@ -89,3 +89,10 @@
 .btn-primary:hover {
   background: #0056b3;
 }
+
+/* Mobile tweaks */
+@media (max-width: 768px) {
+  .viewer-header h2 {
+    display: none;
+  }
+}

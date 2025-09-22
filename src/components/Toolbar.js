@@ -44,7 +44,7 @@ export default function Toolbar({
         </div>
       </div>
 
-      <div className="tool-group">
+      <div className="tool-group transform-group">
         <h3>🔄 Transform</h3>
         <div className="tool-buttons">
           <button className="tool-btn" onClick={() => onRotate(-90)} title="Rotate left 90°">
@@ -78,6 +78,14 @@ export default function Toolbar({
         </div>
       )}
 
+
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .transform-group {
+            display: none;
+          }
+        }
+      `}</style>
 
     </div>
   );

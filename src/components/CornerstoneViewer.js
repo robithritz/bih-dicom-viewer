@@ -20,6 +20,17 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       onFileBrowserToggle(showFileBrowser);
     }
   }, [showFileBrowser, onFileBrowserToggle]);
+  // On initial mount, hide sidebar on mobile viewports
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
+      if (isMobile) {
+        setShowFileBrowser(false);
+        if (onFileBrowserToggle) onFileBrowserToggle(false);
+      }
+    }
+  }, []);
+
   const [viewport, setViewport] = useState(null);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
