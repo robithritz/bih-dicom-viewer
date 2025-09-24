@@ -247,118 +247,100 @@ async function handleSingleZipUpload(req, res) {
 }
 
 /**
- * Extract ZIP file and move DICOM files
+ * Extract ZIP (and nested ZIPs) into targetDir, flattening DICOM files
  */
 async function extractZipFile(zipPath, targetDir) {
-  return new Promise((resolve, reject) => {
-    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
-      if (err) {
-        return reject(new Error(`Failed to open ZIP file: ${err.message}`));
-      }
+  const counters = { entriesSeen: 0, dicomFiles: 0 };
 
-      let totalEntries = 0;
-      let processedEntries = 0;
-      let dicomFilesExtracted = 0;
+  async function extractSingleZip(zipFilePath) {
+    const nestedDir = path.join(targetDir, '__nested__');
+    if (!fs.existsSync(nestedDir)) fs.mkdirSync(nestedDir, { recursive: true });
 
-      // Count total entries first
-      zipfile.on('entry', (entry) => {
-        totalEntries++;
+    await new Promise((resolve, reject) => {
+      yauzl.open(zipFilePath, { lazyEntries: true }, (err, zipfile) => {
+        if (err) return reject(new Error(`Failed to open ZIP file: ${err.message}`));
+        const nestedZipPaths = [];
         zipfile.readEntry();
-      });
 
-      zipfile.on('end', () => {
-        if (totalEntries === 0) {
-          return reject(new Error('ZIP file is empty'));
-        }
+        zipfile.on('entry', (entry) => {
+          counters.entriesSeen++;
+          if (/\/$/.test(entry.fileName)) { zipfile.readEntry(); return; }
+          const base = path.basename(entry.fileName);
+          const ext = path.extname(base).toLowerCase();
 
-        // Reopen to process entries
-        yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile2) => {
-          if (err) {
-            return reject(new Error(`Failed to reopen ZIP file: ${err.message}`));
+          if (ext === '.zip') {
+            zipfile.openReadStream(entry, (err, rs) => {
+              if (err) { zipfile.readEntry(); return; }
+              let outPath = path.join(nestedDir, base);
+              let c = 1;
+              while (fs.existsSync(outPath)) {
+                const nameNoExt = path.basename(base, ext);
+                outPath = path.join(nestedDir, `${nameNoExt}_${c}${ext}`);
+                c++;
+              }
+              const ws = fs.createWriteStream(outPath);
+              rs.pipe(ws);
+              ws.on('close', () => { nestedZipPaths.push(outPath); zipfile.readEntry(); });
+              ws.on('error', () => zipfile.readEntry());
+            });
+            return;
           }
 
-          zipfile2.on('entry', (entry) => {
-            processedEntries++;
+          const isDicom = ext === '.dcm' || ext === '.dicom' || ext === '';
+          if (!isDicom) { zipfile.readEntry(); return; }
 
-            if (/\/$/.test(entry.fileName)) {
-              // Directory entry
-              zipfile2.readEntry();
-              return;
+          zipfile.openReadStream(entry, (err, rs) => {
+            if (err) { zipfile.readEntry(); return; }
+            let outPath = path.join(targetDir, base);
+            let n = 1;
+            while (fs.existsSync(outPath)) {
+              const e = path.extname(base);
+              const nameNoExt = path.basename(base, e);
+              outPath = path.join(targetDir, `${nameNoExt}_${n}${e}`);
+              n++;
             }
-
-            // Skip macOS resource fork files
-            if (entry.fileName.includes('__MACOSX') || entry.fileName.startsWith('._')) {
-              console.log(`⏭️ Skipping macOS resource file: ${entry.fileName}`);
-              zipfile2.readEntry();
-              return;
-            }
-
-            // Only process .dcm files
-            if (!entry.fileName.toLowerCase().endsWith('.dcm')) {
-              console.log(`⏭️ Skipping non-DICOM file: ${entry.fileName}`);
-              zipfile2.readEntry();
-              return;
-            }
-
-            // Extract DICOM file
-            zipfile2.openReadStream(entry, (err, readStream) => {
-              if (err) {
-                console.error(`❌ Failed to read ${entry.fileName}:`, err);
-                zipfile2.readEntry();
-                return;
-              }
-
-              const fileName = path.basename(entry.fileName);
-              const outputPath = path.join(targetDir, fileName);
-
-              const writeStream = fs.createWriteStream(outputPath);
-              readStream.pipe(writeStream);
-
-              writeStream.on('close', () => {
-                dicomFilesExtracted++;
-                console.log(`✅ Extracted: ${fileName}`);
-                zipfile2.readEntry();
-              });
-
-              writeStream.on('error', (err) => {
-                console.error(`❌ Failed to write ${fileName}:`, err);
-                zipfile2.readEntry();
-              });
-            });
+            const ws = fs.createWriteStream(outPath);
+            rs.pipe(ws);
+            ws.on('close', () => { counters.dicomFiles++; zipfile.readEntry(); });
+            ws.on('error', () => zipfile.readEntry());
           });
-
-          zipfile2.on('end', () => {
-            // Clean up macOS ._ files from target directory
-            try {
-              const files = fs.readdirSync(targetDir);
-              files.forEach(file => {
-                if (file.startsWith('._')) {
-                  const filePath = path.join(targetDir, file);
-                  fs.unlinkSync(filePath);
-                  console.log(`🗑️ Removed macOS resource file: ${file}`);
-                }
-              });
-            } catch (cleanupError) {
-              console.warn('⚠️ Failed to clean up macOS files:', cleanupError);
-            }
-
-            resolve({
-              dicomFilesExtracted,
-              totalFilesInZip: totalEntries
-            });
-          });
-
-          zipfile2.on('error', (err) => {
-            reject(new Error(`ZIP extraction error: ${err.message}`));
-          });
-
-          zipfile2.readEntry();
         });
-      });
 
-      zipfile.readEntry();
+        zipfile.on('end', async () => {
+          for (const nz of nestedZipPaths) {
+            try { await extractSingleZip(nz); } catch (e) { console.warn('Nested zip failed:', nz, e.message); }
+            try { fs.unlinkSync(nz); } catch { }
+          }
+          resolve();
+        });
+
+        zipfile.on('error', (e) => reject(new Error(`ZIP extraction error: ${e.message}`)));
+      });
     });
-  });
+  }
+
+  await extractSingleZip(zipPath);
+
+  // Cleanup unwanted files
+  try {
+    const files = fs.readdirSync(targetDir);
+    for (const f of files) {
+      if (f === '__nested__') continue;
+      if (f.startsWith('._') || f === '.DS_Store' || f === 'Thumbs.db' || f === 'desktop.ini' || f.startsWith('~$') || f.endsWith('.tmp') || f === '__MACOSX') {
+        const p = path.join(targetDir, f);
+        try {
+          if (fs.statSync(p).isDirectory()) fs.rmSync(p, { recursive: true, force: true });
+          else fs.unlinkSync(p);
+        } catch { }
+      }
+    }
+  } catch { }
+
+  // Remove nested dir if created
+  try { fs.rmSync(path.join(targetDir, '__nested__'), { recursive: true, force: true }); } catch { }
+
+
+  return { dicomFilesExtracted: counters.dicomFiles, totalFilesInZip: counters.entriesSeen };
 }
 
 export default requireAdminAuth(handleSingleZipUpload);

@@ -191,224 +191,194 @@ async function assembleZipFile(sessionId, session) {
 }
 
 /**
- * Extract ZIP file and move DICOM files
+ * Extract ZIP file and nested ZIPs, writing all DICOM files into target folder
  */
 async function extractZipFile(zipPath, folderName, sessionId, uploadedBy) {
-  // Check if folder already exists and create unique name if needed
+  // Ensure target folder (unique if exists)
   let finalFolderName = folderName;
   let targetDir = path.join(DICOM_DIR, finalFolderName);
-
   if (fs.existsSync(targetDir)) {
-    // Generate timestamp suffix
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: YYYY-MM-DDTHH-MM-SS
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     finalFolderName = `${folderName}-${timestamp}`;
     targetDir = path.join(DICOM_DIR, finalFolderName);
-
     console.log(`📁 Folder ${folderName} already exists, using ${finalFolderName} instead`);
   }
-
-  // Ensure target directory exists
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
     console.log(`📁 Created directory: ${targetDir}`);
   }
 
-  return new Promise((resolve, reject) => {
-    // Update extraction status
-    ExtractionSessionManager.update(sessionId, {
-      stage: 'Extracting ZIP file',
-      message: `Opening ZIP archive... Target: ${finalFolderName}`
-    });
+  ExtractionSessionManager.update(sessionId, {
+    stage: 'Extracting ZIP file',
+    message: `Opening ZIP archive (with nested zips)... Target: ${finalFolderName}`
+  });
 
-    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
-      if (err) {
-        return reject(new Error(`Failed to open ZIP file: ${err.message}`));
-      }
+  const counters = { entriesSeen: 0, dicomFiles: 0 };
 
-      let totalEntries = 0;
-      let processedEntries = 0;
-      let dicomFilesExtracted = 0;
-      const extractedFiles = [];
+  async function extractSingleZip(zipFilePath) {
+    const nestedDir = path.join(targetDir, '__nested__');
+    if (!fs.existsSync(nestedDir)) fs.mkdirSync(nestedDir, { recursive: true });
 
-      // Count total entries first
-      zipfile.on('entry', (entry) => {
-        totalEntries++;
-      });
+    await new Promise((resolve, reject) => {
+      yauzl.open(zipFilePath, { lazyEntries: true }, (err, zipfile) => {
+        if (err) return reject(new Error(`Failed to open ZIP file: ${err.message}`));
 
-      // Reset to process entries
-      zipfile.readEntry();
+        const nestedZipPaths = [];
+        zipfile.readEntry();
 
-      zipfile.on('entry', (entry) => {
-        processedEntries++;
+        zipfile.on('entry', (entry) => {
+          counters.entriesSeen++;
 
-        // Skip directories
-        if (/\/$/.test(entry.fileName)) {
-          zipfile.readEntry();
-          return;
-        }
-
-        // Check if file is DICOM
-        const fileName = path.basename(entry.fileName);
-        const ext = path.extname(fileName).toLowerCase();
-        const isDicom = ext === '.dcm' || ext === '.dicom' || ext === '';
-
-        if (!isDicom) {
-          // Skip non-DICOM files
-          zipfile.readEntry();
-          return;
-        }
-
-        // Update progress
-        ExtractionSessionManager.update(sessionId, {
-          stage: 'Extracting DICOM files',
-          message: `Processing ${fileName}...`,
-          filesProcessed: processedEntries,
-          totalFilesInZip: totalEntries
-        });
-
-        // Extract DICOM file
-        zipfile.openReadStream(entry, (err, readStream) => {
-          if (err) {
-            console.error(`Error extracting ${entry.fileName}:`, err);
+          // Skip directories
+          if (/\/$/.test(entry.fileName)) {
             zipfile.readEntry();
             return;
           }
 
-          // Handle duplicate filenames
-          let targetPath = path.join(targetDir, fileName);
-          let counter = 1;
-          while (fs.existsSync(targetPath)) {
-            const ext = path.extname(fileName);
-            const nameWithoutExt = path.basename(fileName, ext);
-            targetPath = path.join(targetDir, `${nameWithoutExt}_${counter}${ext}`);
-            counter++;
+          const base = path.basename(entry.fileName);
+          const ext = path.extname(base).toLowerCase();
+
+          // If entry is another zip, write it out and process later
+          if (ext === '.zip') {
+            zipfile.openReadStream(entry, (err, rs) => {
+              if (err) { zipfile.readEntry(); return; }
+              let outPath = path.join(nestedDir, base);
+              let c = 1;
+              while (fs.existsSync(outPath)) {
+                const nameNoExt = path.basename(base, ext);
+                outPath = path.join(nestedDir, `${nameNoExt}_${c}${ext}`);
+                c++;
+              }
+              const ws = fs.createWriteStream(outPath);
+              rs.pipe(ws);
+              ws.on('close', () => {
+                nestedZipPaths.push(outPath);
+                zipfile.readEntry();
+              });
+              ws.on('error', () => zipfile.readEntry());
+            });
+            return;
           }
 
-          // Write file to target directory
-          const writeStream = fs.createWriteStream(targetPath);
-          readStream.pipe(writeStream);
-
-          writeStream.on('close', () => {
-            dicomFilesExtracted++;
-            extractedFiles.push(targetPath);
-
-            // Update progress
-            ExtractionSessionManager.update(sessionId, {
-              filesProcessed: processedEntries,
-              message: `Extracted ${dicomFilesExtracted} DICOM files...`
-            });
-
-            // Continue to next entry
+          // Only extract DICOM files (.dcm/.dicom or no extension)
+          const isDicom = ext === '.dcm' || ext === '.dicom' || ext === '';
+          if (!isDicom) {
             zipfile.readEntry();
+            return;
+          }
+
+          ExtractionSessionManager.update(sessionId, {
+            stage: 'Extracting DICOM files',
+            message: `Processing ${base}...`,
           });
 
-          writeStream.on('error', (err) => {
-            console.error(`Error writing ${targetPath}:`, err);
-            zipfile.readEntry();
+          zipfile.openReadStream(entry, (err, rs) => {
+            if (err) { zipfile.readEntry(); return; }
+            // Deduplicate filename
+            let outPath = path.join(targetDir, base);
+            let n = 1;
+            while (fs.existsSync(outPath)) {
+              const e = path.extname(base);
+              const nameNoExt = path.basename(base, e);
+              outPath = path.join(targetDir, `${nameNoExt}_${n}${e}`);
+              n++;
+            }
+            const ws = fs.createWriteStream(outPath);
+            rs.pipe(ws);
+            ws.on('close', () => {
+              counters.dicomFiles++;
+              ExtractionSessionManager.update(sessionId, {
+                message: `Extracted ${counters.dicomFiles} DICOM files...`
+              });
+              zipfile.readEntry();
+            });
+            ws.on('error', () => zipfile.readEntry());
           });
         });
-      });
 
-      zipfile.on('end', () => {
-        // Clean up unwanted files from target directory
-        try {
-          const targetFiles = fs.readdirSync(targetDir);
-          const unwantedFiles = targetFiles.filter(file => {
-            return (
-              file.startsWith('._') ||           // macOS resource fork files
-              file === '.DS_Store' ||            // macOS folder metadata
-              file === 'Thumbs.db' ||            // Windows thumbnail cache
-              file === 'desktop.ini' ||          // Windows folder settings
-              file.startsWith('~$') ||           // Office temporary files
-              file.endsWith('.tmp') ||           // Temporary files
-              file === '__MACOSX'                // macOS metadata folder
-            );
-          });
-
-          for (const unwantedFile of unwantedFiles) {
-            const unwantedPath = path.join(targetDir, unwantedFile);
-
-            // Handle both files and directories
-            if (fs.statSync(unwantedPath).isDirectory()) {
-              // Remove directory recursively
-              fs.rmSync(unwantedPath, { recursive: true, force: true });
-              console.log(`🗑️ Removed unwanted directory: ${unwantedFile}`);
-            } else {
-              // Remove file
-              fs.unlinkSync(unwantedPath);
-              console.log(`🗑️ Removed unwanted file: ${unwantedFile}`);
+        zipfile.on('end', async () => {
+          // Recursively extract nested zips, then delete them
+          for (const nz of nestedZipPaths) {
+            try {
+              await extractSingleZip(nz);
+            } catch (e) {
+              console.warn('⚠️ Failed to extract nested zip:', nz, e.message);
+            } finally {
+              try { fs.unlinkSync(nz); } catch { }
             }
           }
+          resolve();
+        });
 
-          if (unwantedFiles.length > 0) {
-            console.log(`✅ Cleaned up ${unwantedFiles.length} unwanted files/folders from ${folderName}`);
-            ExtractionSessionManager.update(sessionId, {
-              stage: 'Cleaning up',
-              message: `Removed ${unwantedFiles.length} unwanted files`
-            });
-          }
-        } catch (cleanupError) {
-          console.warn('⚠️ Failed to clean up unwanted files:', cleanupError);
-        }
-
-        // Process DICOM studies and save to database
-        console.log(`🔄 Starting DICOM study processing for folder: ${finalFolderName}`);
-
-        processDicomStudies(finalFolderName, sessionId, uploadedBy)
-          .then((processingResult) => {
-            console.log(`✅ DICOM processing completed:`, processingResult);
-
-            // Update final status with database processing results
-            ExtractionSessionManager.setComplete(sessionId, {
-              dicomFilesExtracted,
-              totalFilesInZip: totalEntries,
-              studiesProcessed: processingResult.studiesProcessed,
-              studiesSkipped: processingResult.studiesSkipped
-            });
-            ExtractionSessionManager.update(sessionId, {
-              stage: 'Completed',
-              message: `Successfully extracted ${dicomFilesExtracted} DICOM files and processed ${processingResult.studiesProcessed} studies to folder: ${finalFolderName}`,
-              finalFolderName: finalFolderName
-            });
-
-            resolve({
-              dicomFilesExtracted,
-              totalFilesInZip: totalEntries,
-              finalFolderName: finalFolderName,
-              studiesProcessed: processingResult.studiesProcessed,
-              studiesSkipped: processingResult.studiesSkipped
-            });
-          })
-          .catch((processingError) => {
-            console.error('❌ DICOM processing failed:', processingError);
-            console.error('❌ Full error stack:', processingError.stack);
-
-            // Still mark as complete but with processing error
-            ExtractionSessionManager.setComplete(sessionId, {
-              dicomFilesExtracted,
-              totalFilesInZip: totalEntries,
-              processingError: processingError.message
-            });
-            ExtractionSessionManager.update(sessionId, {
-              stage: 'Completed with warnings',
-              message: `Extracted ${dicomFilesExtracted} DICOM files but failed to process studies: ${processingError.message}`,
-              finalFolderName: finalFolderName
-            });
-
-            resolve({
-              dicomFilesExtracted,
-              totalFilesInZip: totalEntries,
-              finalFolderName: finalFolderName,
-              processingError: processingError.message
-            });
-          });
-      });
-
-      zipfile.on('error', (err) => {
-        reject(new Error(`ZIP extraction error: ${err.message}`));
+        zipfile.on('error', (e) => reject(new Error(`ZIP extraction error: ${e.message}`)));
       });
     });
-  });
+  }
+
+  await extractSingleZip(zipPath);
+
+  // Cleanup unwanted files in target
+  try {
+    const items = fs.readdirSync(targetDir);
+    for (const item of items) {
+      if (item === '__nested__') continue;
+      if (item.startsWith('._') || item === '.DS_Store' || item === 'Thumbs.db' || item === 'desktop.ini' || item.startsWith('~$') || item.endsWith('.tmp') || item === '__MACOSX') {
+        const p = path.join(targetDir, item);
+        try {
+          if (fs.statSync(p).isDirectory()) fs.rmSync(p, { recursive: true, force: true });
+          else fs.unlinkSync(p);
+        } catch { }
+      }
+    }
+  } catch (cleanupError) {
+    console.warn('⚠️ Failed to clean up unwanted files:', cleanupError);
+  }
+
+  // Remove nested dir if created
+  try { fs.rmSync(path.join(targetDir, '__nested__'), { recursive: true, force: true }); } catch { }
+
+
+  // Process DICOM studies and save to DB
+  console.log(`🔄 Starting DICOM study processing for folder: ${finalFolderName}`);
+  try {
+    const processingResult = await processDicomStudies(finalFolderName, sessionId, uploadedBy);
+    ExtractionSessionManager.setComplete(sessionId, {
+      dicomFilesExtracted: counters.dicomFiles,
+      totalFilesInZip: counters.entriesSeen,
+      studiesProcessed: processingResult.studiesProcessed,
+      studiesSkipped: processingResult.studiesSkipped
+    });
+    ExtractionSessionManager.update(sessionId, {
+      stage: 'Completed',
+      message: `Successfully extracted ${counters.dicomFiles} DICOM files and processed ${processingResult.studiesProcessed} studies to folder: ${finalFolderName}`,
+      finalFolderName
+    });
+    return {
+      dicomFilesExtracted: counters.dicomFiles,
+      totalFilesInZip: counters.entriesSeen,
+      finalFolderName,
+      studiesProcessed: processingResult.studiesProcessed,
+      studiesSkipped: processingResult.studiesSkipped
+    };
+  } catch (processingError) {
+    console.error('❌ DICOM processing failed:', processingError);
+    ExtractionSessionManager.setComplete(sessionId, {
+      dicomFilesExtracted: counters.dicomFiles,
+      totalFilesInZip: counters.entriesSeen,
+      processingError: processingError.message
+    });
+    ExtractionSessionManager.update(sessionId, {
+      stage: 'Completed with warnings',
+      message: `Extracted ${counters.dicomFiles} DICOM files but failed to process studies: ${processingError.message}`,
+      finalFolderName
+    });
+    return {
+      dicomFilesExtracted: counters.dicomFiles,
+      totalFilesInZip: counters.entriesSeen,
+      finalFolderName,
+      processingError: processingError.message
+    };
+  }
 }
 
 
