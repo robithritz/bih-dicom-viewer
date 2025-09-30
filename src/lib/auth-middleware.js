@@ -201,12 +201,12 @@ export const requireAdminAuth = (handler) => {
 
       // Verify admin token
       const decoded = jwt.verify(token, JWT_SECRET);
-      console.log("dECODE", decoded);
+      // console.log("dECODE", decoded);
 
       // Get admin user data
       const user = await getUserById(decoded.id);
 
-      console.log(user);
+      // console.log(user);
 
       if (!user || user.role !== 'dicomadmin') {
         return res.status(403).json({ error: 'Admin privileges required' });

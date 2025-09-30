@@ -682,13 +682,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   // Navigate to previous series
   const goToPreviousSeries = () => {
     if (seriesData.length > 0 && currentSeriesIndex > 0) {
-      const previousSeries = seriesData[currentSeriesIndex - 1];
+      const newSeriesIndex = currentSeriesIndex - 1;
+      const previousSeries = seriesData[newSeriesIndex];
       const firstFileInSeries = previousSeries.files[0];
       if (firstFileInSeries) {
-        const viewerPath = isAdmin
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(firstFileInSeries.name)}`
-          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(firstFileInSeries.name)}`;
-        window.location.href = viewerPath;
+        // SPA: switch series and load first file without page reload
+        navigateToFileInSeries(0, newSeriesIndex);
       }
     }
   };
@@ -696,13 +695,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   // Navigate to next series
   const goToNextSeries = () => {
     if (seriesData.length > 0 && currentSeriesIndex < seriesData.length - 1) {
-      const nextSeries = seriesData[currentSeriesIndex + 1];
+      const newSeriesIndex = currentSeriesIndex + 1;
+      const nextSeries = seriesData[newSeriesIndex];
       const firstFileInSeries = nextSeries.files[0];
       if (firstFileInSeries) {
-        const viewerPath = isAdmin
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(firstFileInSeries.name)}`
-          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(firstFileInSeries.name)}`;
-        window.location.href = viewerPath;
+        // SPA: switch series and load first file without page reload
+        navigateToFileInSeries(0, newSeriesIndex);
       }
     }
   };
@@ -735,14 +733,16 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     }
   };
 
-  // Navigate to a specific file index within the current series (for smooth scrolling)
-  const navigateToFileInSeries = async (fileIndex) => {
-    if (seriesData.length > 0 && currentSeriesIndex >= 0) {
-      const currentSeries = seriesData[currentSeriesIndex];
+  // Navigate to a specific file index within a series (SPA, no page reload)
+  const navigateToFileInSeries = async (fileIndex, seriesIndexOverride = null) => {
+    const seriesIndex = seriesIndexOverride !== null ? seriesIndexOverride : currentSeriesIndex;
+    if (seriesData.length > 0 && seriesIndex >= 0) {
+      const currentSeries = seriesData[seriesIndex];
       if (currentSeries && fileIndex >= 0 && fileIndex < currentSeries.files.length) {
         const targetFile = currentSeries.files[fileIndex];
 
         setIsNavigatingInSeries(true);
+        if (seriesIndex !== currentSeriesIndex) setCurrentSeriesIndex(seriesIndex);
         setCurrentSeriesFileIndex(fileIndex);
 
         try {
@@ -934,9 +934,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     if (!cornerstoneRef.current || !elementRef.current) return;
 
     try {
+      const currentSeries = seriesData[currentSeriesIndex];
+      const currentFileName = currentSeries?.files?.[currentSeriesFileIndex]?.name || filename;
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(currentFileName)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(currentFileName)}`;
       const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
       const image = await cornerstoneRef.current.loadAndCacheImage(imageId);
 
@@ -962,7 +964,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     } catch (error) {
       console.error('Error loading frame:', error);
     }
-  }, [filename, viewport, cornerstoneTools, currentTool, activateTool]); // Add dependencies for useCallback
+  }, [seriesData, currentSeriesIndex, currentSeriesFileIndex, filename, viewport, cornerstoneTools, currentTool, activateTool, isAdmin]); // Dependencies for useCallback
 
   const handleScroll = useCallback((e) => {
     e.preventDefault();
