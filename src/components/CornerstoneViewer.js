@@ -1250,6 +1250,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
           {seriesPreload.inProgress && seriesPreload.total > 0 && (
             <div className="absolute left-1/2 transform -translate-x-1/2 bottom-3 z-50 px-3 py-2 bg-black bg-opacity-60 rounded">
               <div className="flex items-center gap-2 text-white text-xs">
+                <span className="opacity-90">loading all images...</span>
                 <div className="w-40 h-1.5 bg-gray-700 rounded overflow-hidden">
                   <div
                     className="h-1.5 bg-purple-500"
