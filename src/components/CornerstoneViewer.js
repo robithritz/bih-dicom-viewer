@@ -1187,10 +1187,29 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
             patientId={filename.includes('/') ? filename.split('/')[0].split('_')[0] : filename} // Extract patient ID from folder name
             currentFile={filename}
             onFileSelect={(newFilename) => {
-              const viewerPath = isAdmin
-                ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(newFilename)}`
-                : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(newFilename)}`;
-              window.location.href = viewerPath;
+              try {
+                let targetSeriesIndex = -1;
+                let targetFileIndex = 0;
+                for (let i = 0; i < seriesData.length; i++) {
+                  const idx = seriesData[i]?.files?.findIndex(f => f.name === newFilename);
+                  if (idx !== -1) { targetSeriesIndex = i; targetFileIndex = idx; break; }
+                }
+                if (targetSeriesIndex === -1) {
+                  // Fallback: match by filename suffix (in case different path formatting)
+                  for (let i = 0; i < seriesData.length; i++) {
+                    const idx = seriesData[i]?.files?.findIndex(f => f.name.endsWith('/' + newFilename));
+                    if (idx !== -1) { targetSeriesIndex = i; targetFileIndex = idx; break; }
+                  }
+                }
+                if (targetSeriesIndex !== -1) {
+                  navigateToFileInSeries(targetFileIndex, targetSeriesIndex);
+                } else {
+                  // Default: keep current series, go to first file
+                  navigateToFileInSeries(0, currentSeriesIndex);
+                }
+              } catch (e) {
+                navigateToFileInSeries(0, currentSeriesIndex);
+              }
             }}
             onClose={() => setShowFileBrowser(false)}
           />
