@@ -63,16 +63,18 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
   // Background preloading configuration
   const PRELOAD_CONFIG = {
-    AHEAD_COUNT: 5,     // Preload 5 files ahead
-    BEHIND_COUNT: 3,    // Keep 3 files behind in cache
-    MAX_CACHE_SIZE: 20, // Maximum cached images
-    PRELOAD_DELAY: 100  // Delay between preloads (ms)
+    AHEAD_COUNT: 8,     // Preload 8 files ahead
+    BEHIND_COUNT: 5,    // Keep 5 files behind in cache
+    MAX_CACHE_SIZE: 50, // Maximum cached images
+    PRELOAD_DELAY: 50   // Delay between preloads (ms)
   };
   const [isNavigatingInSeries, setIsNavigatingInSeries] = useState(false);
 
   const totalFramesRef = useRef(totalFrames);
   const currentFramesRef = useRef(currentFrame);
   const cornerstoneRef = useRef(null);
+
+  const wheelThrottleRef = useRef(0);
 
   useEffect(() => {
     initializeCornerstone();
@@ -301,7 +303,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         // Try to detect frames from loaded image data
         try {
           const testImageId = `wadouri:${apiPath}`;
-          const testImage = await cornerstone.loadImage(testImageId);
+          const testImage = await cornerstone.loadAndCacheImage(testImageId);
 
           if (testImage && testImage.data) {
             // Try different DICOM tags for frame count
@@ -329,7 +331,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
       setLoadingProgress(60);
 
-      const image = await cornerstone.loadImage(finalImageId);
+      const image = await cornerstone.loadAndCacheImage(finalImageId);
       setLoadingProgress(80);
 
       cornerstone.displayImage(elementRef.current, image);
@@ -752,46 +754,38 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
             setViewport(viewport);
 
           } else {
-            // Load the new file directly without changing URL (for smooth navigation)
-            const apiPath = isAdmin
-              ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-info/${encodeURIComponent(targetFile.name)}`
-              : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-info/${encodeURIComponent(targetFile.name)}`;
+            // Load directly without metadata call; cornerstone caches the image
+            const imageApiPath = isAdmin
+              ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
+              : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(targetFile.name)}`;
+            const imageIdBase = `wadouri:${imageApiPath}`;
 
-            const token = isAdmin
-              ? `Bearer ${localStorage.getItem('admin-auth-token')}`
-              : `Bearer ${localStorage.getItem('auth-token')}`;
+            // Load first frame (or single frame) and detect total frames from dataset
+            const image = await cornerstone.loadAndCacheImage(imageIdBase);
 
-            const response = await fetch(apiPath, {
-              headers: { 'Authorization': token }
-            });
+            // Detect number of frames from DICOM tags when available
+            let frames = 1;
+            try {
+              const data = image?.data;
+              if (data) {
+                const alt1 = parseInt(data.string?.('x00280008') || '1', 10);
+                const alt2 = data.uint16 ? data.uint16('x00280008') : undefined;
+                if (!isNaN(alt1) && alt1 > 1) frames = alt1;
+                else if (typeof alt2 === 'number' && alt2 > 1) frames = alt2;
+              }
+            } catch { }
 
-            if (response.ok) {
-              const newMetadata = await response.json();
+            setTotalFrames(frames);
+            setCurrentFrame(0);
 
-              // Load the new DICOM image
-              const imageApiPath = isAdmin
-                ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
-                : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(targetFile.name)}`;
+            cornerstone.displayImage(elementRef.current, image);
 
-              const imageId = `wadouri:${imageApiPath}`;
+            // Reset viewport
+            const viewport = cornerstone.getDefaultViewportForImage(elementRef.current, image);
+            cornerstone.setViewport(elementRef.current, viewport);
+            setViewport(viewport);
 
-              // Check for multi-frame
-              const frames = parseInt(newMetadata?.numberOfFrames || '1');
-              setTotalFrames(frames);
-              setCurrentFrame(0); // Reset to first frame of new file
-
-              const finalImageId = frames > 1 ? `${imageId}#frame=0` : imageId;
-
-              const image = await cornerstone.loadImage(finalImageId);
-              cornerstone.displayImage(elementRef.current, image);
-
-              // Reset viewport
-              const viewport = cornerstone.getDefaultViewportForImage(elementRef.current, image);
-              cornerstone.setViewport(elementRef.current, viewport);
-              setViewport(viewport);
-
-              console.log(`📄 Navigated to file ${fileIndex + 1}/${currentSeries.files.length} in series: ${targetFile.name}`);
-            }
+            console.log(`📄 Navigated to file ${fileIndex + 1}/${currentSeries.files.length} in series: ${targetFile.name}`);
           }
 
           // Start background preloading for surrounding files
@@ -879,40 +873,29 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     }
 
     try {
-      // Load metadata
-      const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-info/${encodeURIComponent(file.name)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-info/${encodeURIComponent(file.name)}`;
-
-      const token = isAdmin
-        ? `Bearer ${localStorage.getItem('admin-auth-token')}`
-        : `Bearer ${localStorage.getItem('auth-token')}`;
-
-      const response = await fetch(apiPath, {
-        headers: { 'Authorization': token }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to load metadata: ${response.status}`);
-      }
-
-      const metadata = await response.json();
-
-      // Load image
+      // Load image directly (no separate metadata call)
       const imageApiPath = isAdmin
         ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(file.name)}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(file.name)}`;
 
-      const imageId = `wadouri:${imageApiPath}`;
-      const frames = parseInt(metadata?.numberOfFrames || '1');
-      const finalImageId = frames > 1 ? `${imageId}#frame=0` : imageId;
+      const imageIdBase = `wadouri:${imageApiPath}`;
+      const image = await cornerstone.loadAndCacheImage(imageIdBase);
 
-      const image = await cornerstone.loadImage(finalImageId);
+      // Detect number of frames from dataset if available
+      let frames = 1;
+      try {
+        const data = image?.data;
+        if (data) {
+          const alt1 = parseInt(data.string?.('x00280008') || '1', 10);
+          const alt2 = data.uint16 ? data.uint16('x00280008') : undefined;
+          if (!isNaN(alt1) && alt1 > 1) frames = alt1;
+          else if (typeof alt2 === 'number' && alt2 > 1) frames = alt2;
+        }
+      } catch { }
 
-      // Cache the loaded image and metadata
+      // Cache the loaded image and computed frames
       const cachedData = {
         image,
-        metadata,
         frames,
         timestamp: Date.now()
       };
@@ -945,7 +928,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
-      const image = await cornerstoneRef.current.loadImage(imageId);
+      const image = await cornerstoneRef.current.loadAndCacheImage(imageId);
 
       // Preserve viewport settings
       if (viewport) {
@@ -972,6 +955,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
   const handleScroll = useCallback((e) => {
     e.preventDefault();
+
+    // Throttle to avoid flooding requests on slow networks
+    const now = Date.now();
+    if (now - wheelThrottleRef.current < 60) return;
+    wheelThrottleRef.current = now;
+
     const delta = e.deltaY > 0 ? 1 : -1;
 
     // Priority 1: Multi-frame navigation within current file
@@ -1067,10 +1056,10 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         goToNextSeries();
       } else if (e.key === 'ArrowLeft' && seriesData.length > 0 && currentSeriesFileIndex > 0) {
         e.preventDefault();
-        goToPreviousFileInSeries();
+        navigateToFileInSeries(currentSeriesFileIndex - 1);
       } else if (e.key === 'ArrowRight' && seriesData.length > 0 && currentSeriesFileIndex < (seriesData[currentSeriesIndex]?.files.length - 1 || 0)) {
         e.preventDefault();
-        goToNextFileInSeries();
+        navigateToFileInSeries(currentSeriesFileIndex + 1);
       }
 
       // Page Up/Down for faster navigation through large series (jump by 10)
