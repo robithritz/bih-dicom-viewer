@@ -68,6 +68,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     MAX_CACHE_SIZE: 50, // Maximum cached images
     PRELOAD_DELAY: 50   // Delay between preloads (ms)
   };
+  const SERIES_PRELOAD_CONCURRENCY = 3; // Parallel background loads for full-series warmup
+
   const [isNavigatingInSeries, setIsNavigatingInSeries] = useState(false);
 
   const totalFramesRef = useRef(totalFrames);
@@ -75,6 +77,10 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   const cornerstoneRef = useRef(null);
 
   const wheelThrottleRef = useRef(0);
+
+  const [seriesPreload, setSeriesPreload] = useState({ inProgress: false, total: 0, loaded: 0, errors: 0 });
+  const completedSeriesPreloadsRef = useRef(new Set());
+  const [firstImageDisplayed, setFirstImageDisplayed] = useState(false);
 
   useEffect(() => {
     initializeCornerstone();
@@ -335,6 +341,10 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       setLoadingProgress(80);
 
       cornerstone.displayImage(elementRef.current, image);
+
+      // Mark first image displayed to trigger series background preload
+      setFirstImageDisplayed(true);
+
 
       // Store viewport for frame changes
       const currentViewport = cornerstone.getViewport(elementRef.current);
@@ -930,6 +940,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
       const image = await cornerstoneRef.current.loadAndCacheImage(imageId);
 
+
       // Preserve viewport settings
       if (viewport) {
         cornerstoneRef.current.displayImage(elementRef.current, image, viewport);
@@ -986,10 +997,58 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     }
   }, [loadFrameImage, seriesData, currentSeriesIndex, currentSeriesFileIndex, isNavigatingInSeries, navigateToFileInSeries]);
 
+  // Background: preload entire current series and show progress
+  const preloadEntireSeries = useCallback(async (series, key) => {
+    if (!series || !Array.isArray(series.files) || series.files.length === 0) return;
+    setSeriesPreload({ inProgress: true, total: series.files.length, loaded: 0, errors: 0 });
+
+    let loaded = 0;
+    let errors = 0;
+    const files = series.files.slice();
+    let index = 0;
+
+    const worker = async () => {
+      while (true) {
+        const i = index++;
+        if (i >= files.length) break;
+        const f = files[i];
+        try {
+          const cacheKey = `${f.name}`;
+          if (!preloadedImages.has(cacheKey)) {
+            await preloadFile(f);
+          }
+        } catch (e) {
+          errors++;
+        } finally {
+          loaded++;
+          setSeriesPreload(prev => ({ ...prev, loaded, errors }));
+        }
+        // Tiny delay to keep UI responsive
+        await new Promise(res => setTimeout(res, 10));
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(SERIES_PRELOAD_CONCURRENCY, files.length) }, () => worker());
+    await Promise.all(workers);
+
+    completedSeriesPreloadsRef.current.add(key);
+    setSeriesPreload(prev => ({ ...prev, inProgress: false }));
+  }, [preloadedImages, preloadFile]);
+
+  // Kick off series preload after first image is displayed
+  useEffect(() => {
+    const series = seriesData[currentSeriesIndex];
+    if (!firstImageDisplayed || !series || !series.files?.length) return;
+    const key = `${series.seriesNumber || currentSeriesIndex}-${series.files.length}`;
+    if (seriesPreload.inProgress || completedSeriesPreloadsRef.current.has(key)) return;
+    preloadEntireSeries(series, key);
+  }, [firstImageDisplayed, seriesData, currentSeriesIndex, seriesPreload.inProgress, preloadEntireSeries]);
+
   // Add scroll event listener for desktop only (no touch events to avoid conflicts)
   useEffect(() => {
     const element = elementRef.current;
     if (!element || !handleScroll) return;
+
 
     // Check if we need scroll navigation (frames > 1 OR files in series > 1)
     const currentSeries = seriesData[currentSeriesIndex];
@@ -1186,6 +1245,22 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
               Frame {currentFrame + 1} of {totalFrames}
             </div>
           )}
+
+          {/* Series background preloading progress */}
+          {seriesPreload.inProgress && seriesPreload.total > 0 && (
+            <div className="absolute left-1/2 transform -translate-x-1/2 bottom-3 z-50 px-3 py-2 bg-black bg-opacity-60 rounded">
+              <div className="flex items-center gap-2 text-white text-xs">
+                <div className="w-40 h-1.5 bg-gray-700 rounded overflow-hidden">
+                  <div
+                    className="h-1.5 bg-purple-500"
+                    style={{ width: `${Math.round((seriesPreload.loaded / seriesPreload.total) * 100)}%` }}
+                  />
+                </div>
+                <span>{Math.round((seriesPreload.loaded / seriesPreload.total) * 100)}%</span>
+              </div>
+            </div>
+          )}
+
 
           {/* Series Navigation */}
           {seriesData.length > 1 && (
