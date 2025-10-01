@@ -1293,7 +1293,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                 onClick={goToPreviousSeries}
                 disabled={currentSeriesIndex === 0}
                 className={`
-                  absolute left-4 top-1/2 transform -translate-y-1/2
+                  absolute left-16 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-50
                   ${currentSeriesIndex === 0
@@ -1312,7 +1312,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                 onClick={goToNextSeries}
                 disabled={currentSeriesIndex === seriesData.length - 1}
                 className={`
-                  absolute right-4 top-1/2 transform -translate-y-1/2
+                  absolute right-16 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-40
                   ${currentSeriesIndex === seriesData.length - 1
