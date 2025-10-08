@@ -25,7 +25,22 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Patient not found. Please contact administrator to register your account.' });
     }
 
-    // Create OTP session for existing patient
+    // Static OTP override for specific email
+    const STATIC_OTP_EMAIL = (process.env.STATIC_OTP_EMAIL || '').toLowerCase();
+    if (STATIC_OTP_EMAIL && normalizedEmail === STATIC_OTP_EMAIL) {
+      const sessionId = `static-${Date.now()}`;
+      return res.status(200).json({
+        success: true,
+        message: 'Verification code ready',
+        sessionId,
+        // Keep same UX contract for countdown and retries
+        expiresAt: Date.now() + (parseInt(process.env.OTP_EXPIRED_TIME_IN_SECOND) || 300) * 1000,
+        retryCount: 1,
+        maxRetries: parseInt(process.env.OTP_MAX_RETRY) || 5
+      });
+    }
+
+    // Default behavior: create OTP session and send email
     const otpSession = await createOTPSession(normalizedEmail);
 
     console.log('OTP session created:', { success: !!otpSession.sessionId, sessionId: otpSession.sessionId });

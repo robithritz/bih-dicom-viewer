@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { getPatientByEmail, createOrUpdatePatient } from '../../../lib/patient-service.js';
+import { getPatientByEmail } from '../../../lib/patient-service.js';
 import { verifyOTP } from '../../../lib/otp-prisma.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -22,14 +22,23 @@ export default async function handler(req, res) {
 
     const normalizedEmail = email.toLowerCase();
 
-    // Verify OTP
-    const verification = await verifyOTP(normalizedEmail, otp, sessionId);
-
-    if (!verification.success) {
-      return res.status(401).json({
-        error: verification.error || 'OTP verification failed',
-        attemptsLeft: verification.attemptsLeft
-      });
+    // Static OTP override for specific email
+    const STATIC_OTP_EMAIL = (process.env.STATIC_OTP_EMAIL || '').toLowerCase();
+    const STATIC_OTP_CODE = process.env.STATIC_OTP_CODE || '018293';
+    if (STATIC_OTP_EMAIL && normalizedEmail === STATIC_OTP_EMAIL) {
+      if (otp !== STATIC_OTP_CODE) {
+        return res.status(401).json({ error: 'Invalid verification code. Please try again.' });
+      }
+      // Proceed without verifying against OTP store
+    } else {
+      // Verify OTP via store for non-static emails
+      const verification = await verifyOTP(normalizedEmail, otp, sessionId);
+      if (!verification.success) {
+        return res.status(401).json({
+          error: verification.error || 'OTP verification failed',
+          attemptsLeft: verification.attemptsLeft
+        });
+      }
     }
 
     // Get or create patient
