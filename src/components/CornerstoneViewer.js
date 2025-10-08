@@ -78,6 +78,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
   const wheelThrottleRef = useRef(0);
 
+  const dragThrottleRef = useRef(0);
+  const scrollTrackRef = useRef(null);
+  const isDraggingScrollbarRef = useRef(false);
+
+
   const [seriesPreload, setSeriesPreload] = useState({ inProgress: false, total: 0, loaded: 0, errors: 0 });
   const completedSeriesPreloadsRef = useRef(new Set());
   const [firstImageDisplayed, setFirstImageDisplayed] = useState(false);
@@ -682,13 +687,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   // Navigate to previous series
   const goToPreviousSeries = () => {
     if (seriesData.length > 0 && currentSeriesIndex > 0) {
-      const previousSeries = seriesData[currentSeriesIndex - 1];
+      const newSeriesIndex = currentSeriesIndex - 1;
+      const previousSeries = seriesData[newSeriesIndex];
       const firstFileInSeries = previousSeries.files[0];
       if (firstFileInSeries) {
-        const viewerPath = isAdmin
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(firstFileInSeries.name)}`
-          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(firstFileInSeries.name)}`;
-        window.location.href = viewerPath;
+        // SPA: switch series and load first file without page reload
+        navigateToFileInSeries(0, newSeriesIndex);
       }
     }
   };
@@ -696,13 +700,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   // Navigate to next series
   const goToNextSeries = () => {
     if (seriesData.length > 0 && currentSeriesIndex < seriesData.length - 1) {
-      const nextSeries = seriesData[currentSeriesIndex + 1];
+      const newSeriesIndex = currentSeriesIndex + 1;
+      const nextSeries = seriesData[newSeriesIndex];
       const firstFileInSeries = nextSeries.files[0];
       if (firstFileInSeries) {
-        const viewerPath = isAdmin
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(firstFileInSeries.name)}`
-          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(firstFileInSeries.name)}`;
-        window.location.href = viewerPath;
+        // SPA: switch series and load first file without page reload
+        navigateToFileInSeries(0, newSeriesIndex);
       }
     }
   };
@@ -735,14 +738,16 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     }
   };
 
-  // Navigate to a specific file index within the current series (for smooth scrolling)
-  const navigateToFileInSeries = async (fileIndex) => {
-    if (seriesData.length > 0 && currentSeriesIndex >= 0) {
-      const currentSeries = seriesData[currentSeriesIndex];
+  // Navigate to a specific file index within a series (SPA, no page reload)
+  const navigateToFileInSeries = async (fileIndex, seriesIndexOverride = null) => {
+    const seriesIndex = seriesIndexOverride !== null ? seriesIndexOverride : currentSeriesIndex;
+    if (seriesData.length > 0 && seriesIndex >= 0) {
+      const currentSeries = seriesData[seriesIndex];
       if (currentSeries && fileIndex >= 0 && fileIndex < currentSeries.files.length) {
         const targetFile = currentSeries.files[fileIndex];
 
         setIsNavigatingInSeries(true);
+        if (seriesIndex !== currentSeriesIndex) setCurrentSeriesIndex(seriesIndex);
         setCurrentSeriesFileIndex(fileIndex);
 
         try {
@@ -805,6 +810,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         } finally {
           setIsNavigatingInSeries(false);
         }
+
       }
     }
   };
@@ -850,6 +856,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   };
 
   const processPreloadQueue = async (queue) => {
+
+
     if (isPreloading || queue.length === 0) return;
 
     setIsPreloading(true);
@@ -916,6 +924,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         const oldestKey = Array.from(preloadedImages.keys())[0];
         setPreloadedImages(prev => {
           const newMap = new Map(prev);
+
           newMap.delete(oldestKey);
           return newMap;
         });
@@ -934,9 +943,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     if (!cornerstoneRef.current || !elementRef.current) return;
 
     try {
+      const currentSeries = seriesData[currentSeriesIndex];
+      const currentFileName = currentSeries?.files?.[currentSeriesFileIndex]?.name || filename;
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(currentFileName)}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(currentFileName)}`;
       const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
       const image = await cornerstoneRef.current.loadAndCacheImage(imageId);
 
@@ -962,7 +973,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     } catch (error) {
       console.error('Error loading frame:', error);
     }
-  }, [filename, viewport, cornerstoneTools, currentTool, activateTool]); // Add dependencies for useCallback
+  }, [seriesData, currentSeriesIndex, currentSeriesFileIndex, filename, viewport, cornerstoneTools, currentTool, activateTool, isAdmin]); // Dependencies for useCallback
 
   const handleScroll = useCallback((e) => {
     e.preventDefault();
@@ -1161,6 +1172,49 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [seriesData, currentSeriesIndex, currentSeriesFileIndex, goToPreviousSeries, goToNextSeries, goToPreviousFileInSeries, goToNextFileInSeries]);
 
+  // Drag handlers for purple series scrollbar (placed before JSX return)
+  const updateScrollbarDrag = useCallback((clientY) => {
+    if (!scrollTrackRef.current) return;
+    const rect = scrollTrackRef.current.getBoundingClientRect();
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    const percentage = rect.height > 0 ? y / rect.height : 0;
+    const filesLen = seriesData[currentSeriesIndex]?.files?.length || 1;
+    const newIndex = Math.round(percentage * (filesLen - 1));
+    if (newIndex !== currentSeriesFileIndex) {
+      const now = Date.now();
+      if (now - dragThrottleRef.current < 60) return; // throttle updates
+      dragThrottleRef.current = now;
+      navigateToFileInSeries(newIndex);
+    }
+  }, [seriesData, currentSeriesIndex, currentSeriesFileIndex, navigateToFileInSeries]);
+
+  const startScrollbarMouseDrag = useCallback((e) => {
+    e.preventDefault();
+    const onMove = (ev) => updateScrollbarDrag(ev.clientY);
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [updateScrollbarDrag]);
+
+  const startScrollbarTouchDrag = useCallback(() => {
+    const onMove = (ev) => {
+      const t = ev.touches && ev.touches[0];
+      if (!t) return;
+      updateScrollbarDrag(t.clientY);
+    };
+    const onEnd = () => {
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+    };
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onEnd, { once: true });
+    window.addEventListener('touchcancel', onEnd, { once: true });
+  }, [updateScrollbarDrag]);
+
   return (
     <div className="cornerstone-container" style={{
       marginLeft: showFileBrowser ? '350px' : '0',
@@ -1184,11 +1238,31 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
             isAdmin={isAdmin}
             patientId={filename.includes('/') ? filename.split('/')[0].split('_')[0] : filename} // Extract patient ID from folder name
             currentFile={filename}
+            activeSeriesIndex={currentSeriesIndex}
             onFileSelect={(newFilename) => {
-              const viewerPath = isAdmin
-                ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(newFilename)}`
-                : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(newFilename)}`;
-              window.location.href = viewerPath;
+              try {
+                let targetSeriesIndex = -1;
+                let targetFileIndex = 0;
+                for (let i = 0; i < seriesData.length; i++) {
+                  const idx = seriesData[i]?.files?.findIndex(f => f.name === newFilename);
+                  if (idx !== -1) { targetSeriesIndex = i; targetFileIndex = idx; break; }
+                }
+                if (targetSeriesIndex === -1) {
+                  // Fallback: match by filename suffix (in case different path formatting)
+                  for (let i = 0; i < seriesData.length; i++) {
+                    const idx = seriesData[i]?.files?.findIndex(f => f.name.endsWith('/' + newFilename));
+                    if (idx !== -1) { targetSeriesIndex = i; targetFileIndex = idx; break; }
+                  }
+                }
+                if (targetSeriesIndex !== -1) {
+                  navigateToFileInSeries(targetFileIndex, targetSeriesIndex);
+                } else {
+                  // Default: keep current series, go to first file
+                  navigateToFileInSeries(0, currentSeriesIndex);
+                }
+              } catch (e) {
+                navigateToFileInSeries(0, currentSeriesIndex);
+              }
             }}
             onClose={() => setShowFileBrowser(false)}
           />
@@ -1271,7 +1345,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                 onClick={goToPreviousSeries}
                 disabled={currentSeriesIndex === 0}
                 className={`
-                  absolute left-4 top-1/2 transform -translate-y-1/2
+                  absolute left-16 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-50
                   ${currentSeriesIndex === 0
@@ -1290,7 +1364,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                 onClick={goToNextSeries}
                 disabled={currentSeriesIndex === seriesData.length - 1}
                 className={`
-                  absolute right-4 top-1/2 transform -translate-y-1/2
+                  absolute right-16 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-40
                   ${currentSeriesIndex === seriesData.length - 1
@@ -1312,7 +1386,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                     {seriesData[currentSeriesIndex]?.seriesDescription || 'Unknown Series'}
                   </div>
                   <div className="text-xs opacity-60">
-                    File {currentSeriesFileIndex + 1} of {seriesData[currentSeriesIndex]?.files.length || 0} in this series
+                    File {currentSeriesFileIndex + 1} of {seriesData[currentSeriesIndex]?.files?.length || 0} in this series
                   </div>
                 </div>
               </div>
@@ -1322,9 +1396,9 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
 
           {/* Series File Scroll Bar (for large series like 451 files) */}
-          {!isMobile && seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+          {!isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
             <div className="absolute left-2 top-16 bottom-16 w-6 z-40">
-              <div className="relative h-full bg-gray-800 bg-opacity-50 rounded-full">
+              <div ref={scrollTrackRef} className="relative h-full bg-gray-800 bg-opacity-50 rounded-full">
                 {/* Scroll track */}
                 <div
                   className="absolute inset-0 rounded-full cursor-pointer"
@@ -1336,8 +1410,10 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
                     const clickY = e.clientY - rect.top;
                     const scrollBarHeight = rect.height;
                     const percentage = clickY / scrollBarHeight;
-                    const newFileIndex = Math.floor(percentage * currentSeries.files.length);
-                    const clampedIndex = Math.max(0, Math.min(currentSeries.files.length - 1, newFileIndex));
+                    const filesLen = currentSeries?.files?.length || 0;
+                    if (!filesLen) return;
+                    const newFileIndex = Math.floor(percentage * filesLen);
+                    const clampedIndex = Math.max(0, Math.min(filesLen - 1, newFileIndex));
 
                     if (clampedIndex !== currentSeriesFileIndex) {
                       navigateToFileInSeries(clampedIndex);
@@ -1347,23 +1423,25 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
                 {/* Scroll thumb */}
                 <div
-                  className="absolute w-full bg-indigo-500 rounded-full transition-all duration-200 hover:bg-indigo-400"
+                  className="absolute w-full bg-indigo-500 rounded-full transition-all duration-100 hover:bg-indigo-400 cursor-grab active:cursor-grabbing"
+                  onMouseDown={startScrollbarMouseDrag}
+                  onTouchStart={startScrollbarTouchDrag}
                   style={{
-                    height: `${Math.max(20, (1 / seriesData[currentSeriesIndex]?.files.length) * 100)}%`,
-                    top: `${(currentSeriesFileIndex / (seriesData[currentSeriesIndex]?.files.length - 1)) * (100 - Math.max(20, (1 / seriesData[currentSeriesIndex]?.files.length) * 100))}%`
+                    height: `${(() => { const len = seriesData[currentSeriesIndex]?.files?.length || 1; return Math.max(20, (1 / len) * 100); })()}%`,
+                    top: `${(() => { const len = seriesData[currentSeriesIndex]?.files?.length || 1; const h = Math.max(20, (1 / len) * 100); const denom = Math.max(1, len - 1); return (currentSeriesFileIndex / denom) * (100 - h); })()}%`
                   }}
                 />
 
                 {/* File count indicator */}
                 <div className="absolute -right-16 top-0 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
-                  {currentSeriesFileIndex + 1} / {seriesData[currentSeriesIndex]?.files.length}
+                  {currentSeriesFileIndex + 1} / {(seriesData[currentSeriesIndex]?.files?.length || 0)}
                 </div>
               </div>
             </div>
           )}
 
           {/* Mobile Series File Navigation (Up/Down arrows) */}
-          {false && isMobile && seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+          {false && isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
               {/* Previous file in series */}
               <button

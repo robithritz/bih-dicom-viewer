@@ -20,7 +20,7 @@ export const verifyAdminSession = async (req) => {
 
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
-    console.log("decoded token nya" + decoded);
+    // console.log("decoded token nya" + decoded);
 
     // Get user data from database
     const user = await getUserByEmail(decoded.email);

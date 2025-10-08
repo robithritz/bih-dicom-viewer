@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function FileBrowser({ currentFile, onFileSelect, onClose, patientId, isAdmin }) {
+export default function FileBrowser({ currentFile, onFileSelect, onClose, patientId, isAdmin, activeSeriesIndex = null }) {
   const [series, setSeries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -86,13 +86,15 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
         )}
 
         {!loading && !error && series.map((seriesItem, index) => {
-          // Check if current file is in this series
-          const isCurrentSeries = seriesItem.files.some(file => file.name === currentFile);
+          // Prefer local activeSeriesIndex for highlight; fallback to membership test
+          const isActive = (typeof activeSeriesIndex === 'number')
+            ? index === activeSeriesIndex
+            : seriesItem.files.some(file => file.name === currentFile);
 
           return (
             <div
               key={index}
-              className={`series-item ${isCurrentSeries ? 'active' : ''}`}
+              className={`series-item ${isActive ? 'active' : ''}`}
               onClick={() => {
                 // Navigate to first file in the series
                 const firstFile = seriesItem.files[0];
@@ -111,7 +113,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
                   {seriesItem.seriesDescription || `Series ${seriesItem.seriesNumber}`}
                 </div>
               </div>
-              {isCurrentSeries && (
+              {isActive && (
                 <div className="current-indicator">👁️</div>
               )}
             </div>
