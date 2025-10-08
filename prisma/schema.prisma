@@ -112,3 +112,28 @@ enum UserRole {
   kitchen
   dicomadmin
 }
+
+// Token tracking for inactivity-based auth
+model AuthToken {
+  id           Int           @id @default(autoincrement())
+  token        String        @unique @db.VarChar(500)
+  userType     TokenUserType @map("user_type")
+  userId       BigInt?       @map("user_id") @db.UnsignedBigInt
+  patientEmail String?       @map("patient_email") @db.VarChar(255)
+  lastUsedAt   DateTime      @default(now()) @map("last_used_at")
+  revoked      Boolean       @default(false)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@index([token])
+  @@index([userId])
+  @@index([patientEmail])
+  @@index([lastUsedAt])
+  @@index([revoked])
+  @@map("dicom_auth_tokens")
+}
+
+enum TokenUserType {
+  admin
+  patient
+}

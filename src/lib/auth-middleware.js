@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { getPatientByEmail } from './patient-service.js';
 import { getUserById } from './user-service.js';
+import { isTokenValidAndTouch } from './token-store.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -24,8 +25,14 @@ export const verifyPatientSession = async (req) => {
       return null;
     }
 
-    // Verify token
+    // Verify token signature (does not enforce inactivity)
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Inactivity enforcement: token must be present and recently used
+    const active = await isTokenValidAndTouch(token);
+    if (!active) {
+      return null;
+    }
 
     // Get patient data from database
     const patient = await getPatientByEmail(decoded.email);

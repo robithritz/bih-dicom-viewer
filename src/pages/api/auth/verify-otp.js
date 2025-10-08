@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { getPatientByEmail } from '../../../lib/patient-service.js';
 import { verifyOTP } from '../../../lib/otp-prisma.js';
+import { saveToken } from '../../../lib/token-store.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -63,6 +64,9 @@ export default async function handler(req, res) {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    // Persist token for inactivity tracking
+    await saveToken({ token, userType: 'patient', patientEmail: normalizedEmail });
 
     // Return token in response for localStorage storage
     res.status(200).json({

@@ -146,7 +146,11 @@ export default function AdminPortal() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch studies');
+        if (response.status === 401) {
+          handleLogout();
+        } else {
+          throw new Error('Failed to fetch studies');
+        }
       }
 
       const data = await response.json();

@@ -1,5 +1,6 @@
 import { authenticateUser } from '../../../../lib/user-service.js';
 import { generateAdminToken } from '../../../../lib/admin-auth-middleware.js';
+import { saveToken } from '../../../../lib/token-store.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -28,6 +29,9 @@ export default async function handler(req, res) {
 
     // Generate JWT token
     const token = generateAdminToken(user);
+
+    // Persist token for inactivity tracking
+    await saveToken({ token, userType: 'admin', userId: user.id });
 
     // Return token in response for localStorage storage
     res.status(200).json({
