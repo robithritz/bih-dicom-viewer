@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { getPatientByEmail } from './patient-service.js';
 import { getUserById } from './user-service.js';
+import { isTokenValidAndTouch } from './token-store.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -24,10 +25,33 @@ export const verifyPatientSession = async (req) => {
       return null;
     }
 
-    // Verify token
+    // Verify token signature (does not enforce inactivity)
     const decoded = jwt.verify(token, JWT_SECRET);
 
+    // Inactivity enforcement: token must be present and recently used
+    const active = await isTokenValidAndTouch(token);
+    if (!active) {
+      return null;
+    }
+
     // Get patient data from database
+    if (decoded.loginBy === 'urn') {
+      return {
+        id: decoded.id,
+        urn: decoded.urn,
+        isMultiPatient: decoded.isMultiPatient,
+        multiUrn: decoded.multiUrn,
+        email: decoded.email,
+        patientId: decoded.psid, // Use psid as patient ID
+        firstName: decoded.firstName,
+        lastName: decoded.lastName,
+        sex: decoded.sex,
+        age: decoded.age,
+        dob: decoded.dob,
+        updatedAt: decoded.updatedAt,
+        loginBy: decoded.loginBy
+      };
+    }
     const patient = await getPatientByEmail(decoded.email);
 
     if (!patient) {
@@ -46,7 +70,8 @@ export const verifyPatientSession = async (req) => {
       sex: patient.sex,
       age: patient.age,
       dob: patient.dob,
-      updatedAt: patient.updatedAt
+      updatedAt: patient.updatedAt,
+      loginBy: decoded.loginBy
     };
 
   } catch (error) {

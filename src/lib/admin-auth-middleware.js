@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { getUserByEmail } from './user-service.js';
+import { isTokenValidAndTouch } from './token-store.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -18,9 +19,14 @@ export const verifyAdminSession = async (req) => {
       return null;
     }
 
-    // Verify token
+    // Verify token signature
     const decoded = jwt.verify(token, JWT_SECRET);
-    // console.log("decoded token nya" + decoded);
+
+    // Inactivity enforcement
+    const active = await isTokenValidAndTouch(token);
+    if (!active) {
+      return null;
+    }
 
     // Get user data from database
     const user = await getUserByEmail(decoded.email);

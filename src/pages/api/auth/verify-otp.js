@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
-import { getPatientByEmail, createOrUpdatePatient } from '../../../lib/patient-service.js';
+import { getPatientByEmail } from '../../../lib/patient-service.js';
 import { verifyOTP } from '../../../lib/otp-prisma.js';
+import { saveToken } from '../../../lib/token-store.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -22,14 +23,23 @@ export default async function handler(req, res) {
 
     const normalizedEmail = email.toLowerCase();
 
-    // Verify OTP
-    const verification = await verifyOTP(normalizedEmail, otp, sessionId);
-
-    if (!verification.success) {
-      return res.status(401).json({
-        error: verification.error || 'OTP verification failed',
-        attemptsLeft: verification.attemptsLeft
-      });
+    // Static OTP override for specific email
+    const STATIC_OTP_EMAIL = (process.env.STATIC_OTP_EMAIL || '').toLowerCase();
+    const STATIC_OTP_CODE = process.env.STATIC_OTP_CODE || '018293';
+    if (STATIC_OTP_EMAIL && normalizedEmail === STATIC_OTP_EMAIL) {
+      if (otp !== STATIC_OTP_CODE) {
+        return res.status(401).json({ error: 'Invalid verification code. Please try again.' });
+      }
+      // Proceed without verifying against OTP store
+    } else {
+      // Verify OTP via store for non-static emails
+      const verification = await verifyOTP(normalizedEmail, otp, sessionId);
+      if (!verification.success) {
+        return res.status(401).json({
+          error: verification.error || 'OTP verification failed',
+          attemptsLeft: verification.attemptsLeft
+        });
+      }
     }
 
     // Get or create patient
@@ -49,11 +59,15 @@ export default async function handler(req, res) {
         lastName: patient.lastName,
         sex: patient.sex,
         age: patient.age,
-        dob: patient.dob
+        dob: patient.dob,
+        loginBy: 'otp'
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    // Persist token for inactivity tracking
+    await saveToken({ token, userType: 'patient', patientEmail: normalizedEmail });
 
     // Return token in response for localStorage storage
     res.status(200).json({
@@ -72,7 +86,8 @@ export default async function handler(req, res) {
         sex: patient.sex,
         age: patient.age,
         dob: patient.dob,
-        updatedAt: patient.updatedAt
+        updatedAt: patient.updatedAt,
+        loginBy: 'otp'
       }
     });
 
