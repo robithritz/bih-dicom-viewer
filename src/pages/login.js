@@ -365,7 +365,7 @@ export default function LoginPage() {
                 onChange={(e) => setDob(e.target.value)}
                 required
                 disabled={loading}
-                placeholder="e.g. YYYY-MM-DD"
+                placeholder="e.g. DDMMYYYY"
               />
             </div>
 
