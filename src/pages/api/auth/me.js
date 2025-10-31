@@ -33,6 +33,26 @@ export default async function handler(req, res) {
     }
 
     // Get patient data
+    if (decoded.loginBy === 'urn') {
+      return res.status(200).json({
+        success: true,
+        patient: {
+          id: decoded.id,
+          urn: decoded.urn,
+          isMultiPatient: decoded.isMultiPatient,
+          multiUrn: decoded.multiUrn,
+          email: decoded.email,
+          patientId: decoded.psid,
+          firstName: decoded.firstName,
+          lastName: decoded.lastName,
+          sex: decoded.sex,
+          age: decoded.age,
+          dob: decoded.dob,
+          updatedAt: decoded.updatedAt,
+          loginBy: decoded.loginBy
+        }
+      });
+    }
     const patient = await getPatientByEmail(decoded.email);
 
     if (!patient) {
@@ -53,7 +73,8 @@ export default async function handler(req, res) {
         sex: patient.sex,
         age: patient.age,
         dob: patient.dob,
-        updatedAt: patient.updatedAt
+        updatedAt: patient.updatedAt,
+        loginBy: decoded.loginBy
       }
     });
 

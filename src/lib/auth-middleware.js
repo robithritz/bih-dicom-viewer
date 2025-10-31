@@ -35,6 +35,23 @@ export const verifyPatientSession = async (req) => {
     }
 
     // Get patient data from database
+    if (decoded.loginBy === 'urn') {
+      return {
+        id: decoded.id,
+        urn: decoded.urn,
+        isMultiPatient: decoded.isMultiPatient,
+        multiUrn: decoded.multiUrn,
+        email: decoded.email,
+        patientId: decoded.psid, // Use psid as patient ID
+        firstName: decoded.firstName,
+        lastName: decoded.lastName,
+        sex: decoded.sex,
+        age: decoded.age,
+        dob: decoded.dob,
+        updatedAt: decoded.updatedAt,
+        loginBy: decoded.loginBy
+      };
+    }
     const patient = await getPatientByEmail(decoded.email);
 
     if (!patient) {
@@ -53,7 +70,8 @@ export const verifyPatientSession = async (req) => {
       sex: patient.sex,
       age: patient.age,
       dob: patient.dob,
-      updatedAt: patient.updatedAt
+      updatedAt: patient.updatedAt,
+      loginBy: decoded.loginBy
     };
 
   } catch (error) {

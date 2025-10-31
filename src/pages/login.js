@@ -16,6 +16,10 @@ export default function LoginPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries, setMaxRetries] = useState(5);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [loginMode, setLoginMode] = useState(''); // 'otp' | 'urn'
+  const [urn, setUrn] = useState('');
+  const [dob, setDob] = useState(''); // as password
+
 
   const { isAuthenticated, loading: authLoading, checkAuth, setUserData } = useAuth();
   const router = useRouter();
@@ -68,7 +72,6 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (data.success) {
-        console.log("data otp", data);
         setSessionId(data.sessionId);
         setExpiresAt(data.expiresAt);
         setRetryCount(data.retryCount);
@@ -170,6 +173,7 @@ export default function LoginPage() {
   const handleBackToEmail = () => {
     setStep('email');
     setOtp('');
+
     setSessionId('');
     setError('');
     setSuccess('');
@@ -181,6 +185,38 @@ export default function LoginPage() {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleUrnLoginSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/login-urn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urn, dob }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        if (data.token) {
+          localStorage.setItem('auth-token', data.token);
+        }
+        if (data.patient) {
+          setUserData(data.patient);
+        }
+        router.replace('/');
+      } else {
+        setError(data.error || 'Login failed');
+      }
+    } catch (err) {
+      setError('Login failed. Please try again.');
+    }
+
+    setLoading(false);
   };
 
   if (authLoading) {
@@ -205,114 +241,139 @@ export default function LoginPage() {
             Dicom Viewer
           </h1>
           <p>Access your medical imaging results</p>
+
         </div>
 
-        {step === 'email' ? (
-          <form onSubmit={handleEmailSubmit} className="auth-form">
-            {error && (
-              <div className="error-message">
-                {error}
+        <div className="login-label">Select Login Type</div>
+
+        {/* Login method switch */}
+        <div className="login-switch">
+          <button
+            type="button"
+            className={`login-tab ${loginMode === 'otp' ? 'active' : ''}`}
+            onClick={() => { setLoginMode('otp'); setError(''); setSuccess(''); setStep('email'); }}
+          >
+            Email
+          </button>
+          <button
+            type="button"
+            className={`login-tab ${loginMode === 'urn' ? 'active' : ''}`}
+            onClick={() => { setLoginMode('urn'); setError(''); setSuccess(''); setStep('email'); }}
+          >
+            URN
+          </button>
+        </div>
+
+        {loginMode === 'otp' ? (
+          step === 'email' ? (
+            <form onSubmit={handleEmailSubmit} className="auth-form">
+              {error && (<div className="error-message">{error}</div>)}
+              {success && (<div className="success-message">{success}</div>)}
+
+              <div className="form-group">
+                <label htmlFor="email">Email Address</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  placeholder="Enter your registered email"
+                />
               </div>
-            )}
-            {success && (
-              <div className="success-message">
-                {success}
+
+              <button type="submit" className="auth-button" disabled={loading}>
+                {loading ? 'Sending Code...' : 'Send Verification Code'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleOtpSubmit} className="auth-form">
+              {error && (<div className="error-message">{error}</div>)}
+              {success && (<div className="success-message">{success}</div>)}
+
+              <div className="otp-info">
+                <p>We've sent a 6-digit verification code to:</p>
+                <strong>{email}</strong>
+                <p className="otp-expires">
+                  {timeLeft > 0 ? (
+                    <>Code expires in {formatTimeLeft(timeLeft)}</>
+                  ) : (
+                    <span style={{ color: '#e74c3c' }}>Code has expired</span>
+                  )}
+                </p>
               </div>
-            )}
 
-            <div className="form-group">
-              <label htmlFor="email">Email Address</label>
-              <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-                placeholder="Enter your registered email"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="auth-button"
-              disabled={loading}
-            >
-              {loading ? 'Sending Code...' : 'Send Verification Code'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleOtpSubmit} className="auth-form">
-            {error && (
-              <div className="error-message">
-                {error}
+              <div className="form-group">
+                <label htmlFor="otp">Verification Code</label>
+                <input
+                  type="text"
+                  id="otp"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  disabled={loading}
+                  placeholder="Enter OTP"
+                  maxLength="6"
+                  className="otp-input"
+                />
               </div>
-            )}
-            {success && (
-              <div className="success-message">
-                {success}
-              </div>
-            )}
 
-            <div className="otp-info">
-              <p>We've sent a 6-digit verification code to:</p>
-              <strong>{email}</strong>
-              <p className="otp-expires">
-                {timeLeft > 0 ? (
-                  <>Code expires in {formatTimeLeft(timeLeft)}</>
-                ) : (
-                  <span style={{ color: '#e74c3c' }}>Code has expired</span>
-                )}
-              </p>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="otp">Verification Code</label>
-              <input
-                type="text"
-                id="otp"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                required
-                disabled={loading}
-                placeholder="Enter OTP"
-                maxLength="6"
-                className="otp-input"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="auth-button"
-              disabled={loading || otp.length !== 6}
-            >
-              {loading ? 'Verifying...' : 'Verify & Sign In'}
-            </button>
-
-            <div className="otp-actions">
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={loading || retryCount >= maxRetries || timeLeft > 0}
-                className="resend-button"
-                title={timeLeft > 0 ? `Wait ${formatTimeLeft(timeLeft)} before resending` : ''}
-              >
-                {loading ? 'Sending...' :
-                  timeLeft > 0 ? `Resend Code in ${formatTimeLeft(timeLeft)}` :
-                    `Resend Code (${retryCount}/${maxRetries})`}
+              <button type="submit" className="auth-button" disabled={loading || otp.length !== 6}>
+                {loading ? 'Verifying...' : 'Verify & Sign In'}
               </button>
 
-              {/* <button
-                type="button"
-                onClick={handleBackToEmail}
+              <div className="otp-actions">
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={loading || retryCount >= maxRetries || timeLeft > 0}
+                  className="resend-button"
+                  title={timeLeft > 0 ? `Wait ${formatTimeLeft(timeLeft)} before resending` : ''}
+                >
+                  {loading ? 'Sending...' :
+                    timeLeft > 0 ? `Resend Code in ${formatTimeLeft(timeLeft)}` :
+                      `Resend Code (${retryCount}/${maxRetries})`}
+                </button>
+              </div>
+            </form>
+          )
+        ) : loginMode === 'urn' ? (
+          <form onSubmit={handleUrnLoginSubmit} className="auth-form">
+            {error && (<div className="error-message">{error}</div>)}
+            {success && (<div className="success-message">{success}</div>)}
+
+            <div className="form-group">
+              <label htmlFor="urn">URN</label>
+              <input
+                type="text"
+                id="urn"
+                value={urn}
+                onChange={(e) => setUrn(e.target.value)}
+                required
                 disabled={loading}
-                className="back-button"
-              >
-                ← Change Email
-              </button> */}
+                placeholder="Enter your URN"
+              />
             </div>
+
+            <div className="form-group">
+              <label htmlFor="dob">Date of Birth (DDMMYYYY)</label>
+              <input
+                type="password"
+                id="dob"
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                required
+                disabled={loading}
+                placeholder="e.g. YYYY-MM-DD"
+              />
+            </div>
+
+            <button type="submit" className="auth-button" disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
           </form>
-        )}
+        ) : null}
 
         {/* <div className="auth-footer">
           <p>
@@ -502,12 +563,37 @@ export default function LoginPage() {
           opacity: 0.5;
           cursor: not-allowed;
         }
-
-        .auth-footer {
+        .login-label {
           text-align: center;
-          margin-top: 30px;
-          padding-top: 20px;
-          border-top: 1px solid #eee;
+          font-weight: 600;
+          color: #333;
+          margin: 0 0 8px 0;
+        }
+
+
+        .login-switch {
+          display: flex;
+          gap: 10px;
+          margin: 10px 0 20px 0;
+        }
+
+        .login-tab {
+          flex: 1;
+          background: transparent;
+          color: #667eea;
+          border: 1px solid #667eea;
+          padding: 10px;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .login-tab.active {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
         }
 
         .auth-footer p {

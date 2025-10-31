@@ -59,7 +59,8 @@ export default async function handler(req, res) {
         lastName: patient.lastName,
         sex: patient.sex,
         age: patient.age,
-        dob: patient.dob
+        dob: patient.dob,
+        loginBy: 'otp'
       },
       JWT_SECRET,
       { expiresIn: '7d' }
@@ -85,7 +86,8 @@ export default async function handler(req, res) {
         sex: patient.sex,
         age: patient.age,
         dob: patient.dob,
-        updatedAt: patient.updatedAt
+        updatedAt: patient.updatedAt,
+        loginBy: 'otp'
       }
     });
 
