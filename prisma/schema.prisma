@@ -60,24 +60,28 @@ enum PatientSex {
 
 // DICOM Study model for storing study metadata
 model DicomStudy {
-  id                 Int      @id @default(autoincrement())
-  studyInstanceUID   String   @unique @map("study_instance_uid") @db.VarChar(255)
-  patientName        String?  @map("patient_name") @db.VarChar(255)
-  patientID          String?  @map("patient_id") @db.VarChar(255)
-  studyDate          String?  @map("study_date") @db.VarChar(20)
-  studyTime          String?  @map("study_time") @db.VarChar(20)
-  studyDescription   String?  @map("study_description") @db.VarChar(500)
-  modality           String?  @db.VarChar(10)
-  thumbnail          String?  @db.LongText // Base64 encoded thumbnail
-  firstFile          String   @map("first_file") @db.VarChar(500)
-  uploadedPatientId  String   @map("uploaded_patient_id") @db.VarChar(10)
-  uploadedFolderName String   @map("uploaded_folder_name") @db.VarChar(255)
-  uploadedBy         String?  @map("uploaded_by") @db.VarChar(255)
-  totalFiles         Int?     @map("total_files") // Total number of DICOM files in study
-  totalSeries        Int?     @map("total_series") // Total number of series in study
-  active             Boolean  @default(true)
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                 Int       @id @default(autoincrement())
+  studyInstanceUID   String    @unique @map("study_instance_uid") @db.VarChar(255)
+  patientName        String?   @map("patient_name") @db.VarChar(255)
+  patientID          String?   @map("patient_id") @db.VarChar(255)
+  studyDate          String?   @map("study_date") @db.VarChar(20)
+  studyTime          String?   @map("study_time") @db.VarChar(20)
+  studyDescription   String?   @map("study_description") @db.VarChar(500)
+  modality           String?   @db.VarChar(10)
+  thumbnail          String?   @db.LongText // Base64 encoded thumbnail
+  firstFile          String    @map("first_file") @db.VarChar(500)
+  uploadedPatientId  String    @map("uploaded_patient_id") @db.VarChar(10)
+  uploadedFolderName String    @map("uploaded_folder_name") @db.VarChar(255)
+  uploadedBy         String?   @map("uploaded_by") @db.VarChar(255)
+  totalFiles         Int?      @map("total_files") // Total number of DICOM files in study
+  totalSeries        Int?      @map("total_series") // Total number of series in study
+  active             Boolean   @default(true)
+  // Public sharing fields
+  isPublic           Boolean   @default(false) @map("is_public")
+  publicToken        String?   @unique @map("public_token") @db.VarChar(64)
+  publicExpiresAt    DateTime? @map("public_expires_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   // Foreign key relationship to Patient
   patient Patient? @relation(fields: [uploadedPatientId], references: [urn])
@@ -88,6 +92,9 @@ model DicomStudy {
   @@index([studyDate])
   @@index([modality])
   @@index([active])
+  @@index([isPublic])
+  @@index([publicToken])
+  @@index([publicExpiresAt])
   @@map("dicom_studies")
 }
 

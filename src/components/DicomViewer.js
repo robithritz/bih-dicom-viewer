@@ -8,7 +8,7 @@ const CornerstoneViewer = dynamic(() => import('./CornerstoneViewer'), {
   loading: () => <div>Loading DICOM viewer...</div>
 });
 
-export default function DicomViewer({ filename, isAdmin = false }) {
+export default function DicomViewer({ filename, isAdmin = false, isPublic = false, publicToken = null }) {
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,23 +24,26 @@ export default function DicomViewer({ filename, isAdmin = false }) {
     if (filename) {
       fetchMetadata();
     }
-  }, [filename]);
+  }, [filename, isPublic, publicToken, isAdmin]);
 
   const fetchMetadata = async () => {
     try {
       setLoading(true);
+      const base = process.env.NEXT_PUBLIC_APP_URL;
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-info/${encodeURIComponent(filename)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-info/${encodeURIComponent(filename)}`;
+        ? `${base}/api/admin/dicom-info/${encodeURIComponent(filename)}`
+        : isPublic && publicToken
+          ? `${base}/api/public/dicom-info/${encodeURIComponent(publicToken)}/${encodeURIComponent(filename)}`
+          : `${base}/api/dicom-info/${encodeURIComponent(filename)}`;
 
-      const token = isAdmin ? `Bearer ${localStorage.getItem('admin-auth-token')}` : `Bearer ${localStorage.getItem('auth-token')}`
+      const headers = {};
+      if (!isPublic) {
+        headers['Authorization'] = isAdmin
+          ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+          : `Bearer ${localStorage.getItem('auth-token')}`;
+      }
 
-
-      const response = await fetch(apiPath, {
-        headers: {
-          'Authorization': token
-        }
-      });
+      const response = await fetch(apiPath, { headers });
 
       if (!response.ok) {
         console.error("❌ API ERROR:", {
@@ -49,7 +52,7 @@ export default function DicomViewer({ filename, isAdmin = false }) {
           url: apiPath
         });
 
-        if (response.status == 401) {
+        if (!isPublic && response.status == 401) {
           router.replace(isAdmin ? '/portal' : '/login');
         }
         throw new Error(`Failed to fetch DICOM metadata: ${response.status} ${response.statusText}`);
@@ -104,6 +107,8 @@ export default function DicomViewer({ filename, isAdmin = false }) {
         filename={filename}
         metadata={metadata}
         isAdmin={isAdmin}
+        isPublic={isPublic}
+        publicToken={publicToken}
         onFileBrowserToggle={handleFileBrowserToggle}
       />
 
