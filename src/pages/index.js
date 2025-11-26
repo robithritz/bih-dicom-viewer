@@ -22,6 +22,8 @@ export default function PatientPortal() {
   const [shareExpiresAt, setShareExpiresAt] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
 
+  const [copiedUID, setCopiedUID] = useState(null);
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -150,6 +152,8 @@ export default function PatientPortal() {
       const data = await res.json();
       setShareUrl(data.shareUrl || '');
       setShareExpiresAt(data.expiresAt || null);
+      // Refresh studies so the badge reflects the new public status
+      await fetchStudies();
     } catch (err) {
       setShareError(err.message || 'Failed to create share');
     } finally {
@@ -163,8 +167,45 @@ export default function PatientPortal() {
       await navigator.clipboard.writeText(shareUrl);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 1500);
+
     } catch (err) {
       setShareError('Failed to copy link');
+    }
+  };
+
+  // Quick actions for public badge
+  const handleCopyPublicLink = async (study) => {
+    const token = study?.publicToken;
+    if (!token) return;
+    const base = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const url = `${base}/public/viewer/${encodeURIComponent(token)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUID(study.studyInstanceUID);
+      setTimeout(() => setCopiedUID(null), 1500);
+    } catch (e) {
+      console.error('Copy failed', e);
+    }
+  };
+
+  const handleRevokeShare = async (studyInstanceUID) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/studies/revoke`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+        },
+        body: JSON.stringify({ studyInstanceUID })
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`Failed to revoke share: ${res.status} ${t}`);
+      }
+      await fetchStudies();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to revoke share');
     }
   };
 
@@ -201,7 +242,32 @@ export default function PatientPortal() {
         ) : (
           <div className="studies-grid">
             {Object.entries(studies).map(([studyId, study]) => (
-              <div key={studyId} className="study-card">
+              <div key={studyId} className="study-card" style={{ position: 'relative' }}>
+                {study.isPublic && study.publicExpiresAt && (new Date(study.publicExpiresAt) > new Date()) && (
+                  <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ background: '#1f2937', color: '#d1fae5', border: '1px solid #10b981', padding: '4px 8px', borderRadius: 12, fontSize: 12 }}>
+                      Public until {new Date(study.publicExpiresAt).toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyPublicLink(study)}
+                      className="view-button"
+                      style={{ background: '#0ea5e9' }}
+                    >
+                      {copiedUID === (study.studyInstanceUID || studyId) ? 'Copied!' : 'Copy Link'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeShare(study.studyInstanceUID || studyId)}
+                      className="view-button"
+                      style={{ background: '#b91c1c' }}
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                )}
+
+
                 <div className="study-thumbnail">
                   {study.thumbnail ? (
                     <img
@@ -234,6 +300,7 @@ export default function PatientPortal() {
                     <p><strong>Files:</strong> {study.totalFiles || 0}</p>
                     <p><strong>Series:</strong> {study.totalSeries || 0}</p>
                   </div>
+
                   <div className="actions" style={{ display: 'flex', gap: 8 }}>
                     <Link
                       href={`/viewer/${encodeURIComponent(study.firstFile)}`}
@@ -257,68 +324,71 @@ export default function PatientPortal() {
         )}
       </div>
 
-      {shareModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ background: '#111827', color: '#fff', borderRadius: '8px', width: '100%', maxWidth: '640px', padding: '20px', position: 'relative', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-            <button onClick={closeShareModal} aria-label="Close" style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>×</button>
-            <h2 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 600 }}>Share Study</h2>
+      {
+        shareModalOpen && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
 
-            <div style={{ background: '#1f2937', borderRadius: '6px', padding: '10px', maxHeight: '160px', overflowY: 'auto', marginBottom: '12px', fontSize: '14px', lineHeight: 1.5 }}>
-              <p style={{ opacity: 0.85 }}>
-                By creating a public link, anyone with the link can view this study until the expiration time you select. Do not share links publicly unless appropriate.
-              </p>
-            </div>
+            <div style={{ background: '#111827', color: '#fff', borderRadius: '8px', width: '100%', maxWidth: '640px', padding: '20px', position: 'relative', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+              <button onClick={closeShareModal} aria-label="Close" style={{ position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>×</button>
+              <h2 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 600 }}>Share Study</h2>
 
-            <form onSubmit={handleCreateShare} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
-              <label htmlFor="shareDuration" style={{ whiteSpace: 'nowrap' }}>Share duration:</label>
-              <select
-                id="shareDuration"
-                value={shareDuration}
-                onChange={(e) => setShareDuration(e.target.value)}
-                disabled={shareLoading}
-                style={{ flex: '0 0 160px', background: '#111827', border: '1px solid #374151', color: '#fff', padding: '8px 10px', borderRadius: '6px' }}
-              >
-                <option value="1w">1 week</option>
-                <option value="1m">1 month</option>
-              </select>
-
-              <button type="submit" disabled={shareLoading || !shareStudyUID} className="view-button" style={{ background: '#4f46e5' }}>
-                {shareLoading ? 'Creating...' : 'Create Share Link'}
-              </button>
-            </form>
-
-            {shareError && (
-              <div style={{ color: '#fca5a5', marginBottom: '8px' }}>{shareError}</div>
-            )}
-
-            {shareUrl && (
-              <div style={{ background: '#1f2937', borderRadius: '6px', padding: '10px', marginBottom: '8px' }}>
-                <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '6px' }}>Public link</div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    readOnly
-                    value={shareUrl}
-                    style={{ flex: 1, background: '#111827', color: '#fff', border: '1px solid #374151', borderRadius: '6px', padding: '8px 10px' }}
-                  />
-                  <button type="button" onClick={handleCopyLink} className="view-button" style={{ background: '#4f46e5', whiteSpace: 'nowrap' }}>
-                    {shareCopied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-                {shareExpiresAt && (
-                  <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '6px' }}>
-                    Expires: {new Date(shareExpiresAt).toLocaleString()}
-                  </div>
-                )}
+              <div style={{ background: '#1f2937', borderRadius: '6px', padding: '10px', maxHeight: '160px', overflowY: 'auto', marginBottom: '12px', fontSize: '14px', lineHeight: 1.5 }}>
+                <p style={{ opacity: 0.85 }}>
+                  By creating a public link, anyone with the link can view this study until the expiration time you select. Do not share links publicly unless appropriate.
+                </p>
               </div>
-            )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="button" onClick={closeShareModal} className="view-button" style={{ background: '#374151' }}>Close</button>
+              <form onSubmit={handleCreateShare} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
+                <label htmlFor="shareDuration" style={{ whiteSpace: 'nowrap' }}>Share duration:</label>
+                <select
+                  id="shareDuration"
+                  value={shareDuration}
+                  onChange={(e) => setShareDuration(e.target.value)}
+                  disabled={shareLoading}
+                  style={{ flex: '0 0 160px', background: '#111827', border: '1px solid #374151', color: '#fff', padding: '8px 10px', borderRadius: '6px' }}
+                >
+                  <option value="1w">1 week</option>
+                  <option value="1m">1 month</option>
+                </select>
+
+                <button type="submit" disabled={shareLoading || !shareStudyUID} className="view-button" style={{ background: '#4f46e5' }}>
+                  {shareLoading ? 'Creating...' : 'Create Share Link'}
+                </button>
+              </form>
+
+              {shareError && (
+                <div style={{ color: '#fca5a5', marginBottom: '8px' }}>{shareError}</div>
+              )}
+
+              {shareUrl && (
+                <div style={{ background: '#1f2937', borderRadius: '6px', padding: '10px', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '6px' }}>Public link</div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      readOnly
+                      value={shareUrl}
+                      style={{ flex: 1, background: '#111827', color: '#fff', border: '1px solid #374151', borderRadius: '6px', padding: '8px 10px' }}
+                    />
+                    <button type="button" onClick={handleCopyLink} className="view-button" style={{ background: '#4f46e5', whiteSpace: 'nowrap' }}>
+                      {shareCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  {shareExpiresAt && (
+                    <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '6px' }}>
+                      Expires: {new Date(shareExpiresAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={closeShareModal} className="view-button" style={{ background: '#374151' }}>Close</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-    </Layout>
+    </Layout >
   );
 }

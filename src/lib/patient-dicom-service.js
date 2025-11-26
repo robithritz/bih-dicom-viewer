@@ -110,6 +110,11 @@ export async function getDicomStudiesForPatient(patientId, options = {}) {
         totalFiles: dbStudy.totalFiles || 0,
         totalSeries: dbStudy.totalSeries || 0,
 
+        // Public sharing fields
+        isPublic: dbStudy.isPublic,
+        publicToken: dbStudy.publicToken,
+        publicExpiresAt: dbStudy.publicExpiresAt,
+
         // Add patient information from database relationship
         uploadedPatientName: dbStudy.patient
           ? `${dbStudy.patient.firstName} ${dbStudy.patient.lastName}`
@@ -229,6 +234,10 @@ export async function getStudyForPatient(studyInstanceUID, patientId) {
       uploadedPatientName: dbStudy.patient
         ? `${dbStudy.patient.firstName} ${dbStudy.patient.lastName}`
         : 'Unknown Patient',
+      // Public share fields
+      isPublic: dbStudy.isPublic,
+      publicToken: dbStudy.publicToken,
+      publicExpiresAt: dbStudy.publicExpiresAt,
       files: [],
       series: {},
       id: dbStudy.id,
