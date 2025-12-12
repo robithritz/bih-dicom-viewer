@@ -10,10 +10,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { urn, dob } = req.body || {};
+    let { urn, last4Id, combined } = req.body || {};
 
-    if (!urn || !dob) {
-      return res.status(400).json({ error: 'URN and DOB are required' });
+    // Support combined input: <URN><last4digits>
+    if (combined && (!urn || !last4Id)) {
+      const s = (combined || '').toString().trim();
+      if (s.length < 5) {
+        return res.status(400).json({ error: 'Invalid input format' });
+      }
+      const tail = s.slice(-4);
+      if (!/^\d{4}$/.test(tail)) {
+        return res.status(400).json({ error: 'Invalid input format' });
+      }
+      urn = s.slice(0, -4).trim();
+      last4Id = tail;
+    }
+
+    if (!urn || !last4Id) {
+      return res.status(400).json({ error: 'URN and last 4 digits of ID are required' });
     }
 
     // Find patient by URN
@@ -24,11 +38,18 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Normalize and compare DOB as string (stored as string in DB)
-    const normalize = (s) => (s || '').toString().trim().toLowerCase();
-    const dobInDMY = normalize(patient.dob).split('-').reverse().join('');
+    // Verify last 4 digits of ID using priority: nik -> passport_num -> kitas_num
+    const firstId = [patient.nik, patient.passport_num, patient.kitas_num].find((v) => (v || '').toString().trim().length > 0);
 
-    if (normalize(dob) !== dobInDMY) {
+    if (!firstId) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const onlyDigits = (s) => (s || '').toString().replace(/\D/g, '');
+    const expectedLast4 = onlyDigits(firstId).slice(-4);
+    const providedLast4 = onlyDigits(last4Id);
+
+    if (!expectedLast4 || expectedLast4 !== providedLast4) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -86,7 +107,7 @@ export default async function handler(req, res) {
       },
     });
   } catch (error) {
-    console.error('URN+DOB login error:', error);
+    console.error('URN+ID login error:', error);
     return res.status(500).json({ error: 'Login failed' });
   }
 }

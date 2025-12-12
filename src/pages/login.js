@@ -17,8 +17,7 @@ export default function LoginPage() {
   const [maxRetries, setMaxRetries] = useState(5);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginMode, setLoginMode] = useState(''); // 'otp' | 'urn'
-  const [urn, setUrn] = useState('');
-  const [dob, setDob] = useState(''); // as password
+  const [urnCombined, setUrnCombined] = useState(''); // "URN and last 4 digits of ID"
 
 
   const { isAuthenticated, loading: authLoading, checkAuth, setUserData } = useAuth();
@@ -194,10 +193,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const combined = (urnCombined || '').trim();
+
       const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/login-urn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urn, dob }),
+        body: JSON.stringify({ combined }),
       });
 
       const data = await response.json();
@@ -246,22 +247,22 @@ export default function LoginPage() {
 
         <div className="login-label">Select Login Type</div>
 
-        {/* Login method switch */}
-        <div className="login-switch">
-          <button
-            type="button"
-            className={`login-tab ${loginMode === 'otp' ? 'active' : ''}`}
-            onClick={() => { setLoginMode('otp'); setError(''); setSuccess(''); setStep('email'); }}
-          >
-            Email
-          </button>
-          <button
-            type="button"
-            className={`login-tab ${loginMode === 'urn' ? 'active' : ''}`}
-            onClick={() => { setLoginMode('urn'); setError(''); setSuccess(''); setStep('email'); }}
-          >
-            URN
-          </button>
+        {/* Login method selection (dropdown) */}
+        <div className="login-select">
+          <div className="select-wrapper">
+            <select
+              id="loginMode"
+              value={loginMode}
+              onChange={(e) => { setLoginMode(e.target.value); setError(''); setSuccess(''); setStep('email'); setUrnCombined(''); }}
+              className="login-select-control"
+              aria-label="Select login method"
+            >
+              <option value="">Select login method</option>
+              <option value="otp">Email</option>
+              <option value="urn">URN</option>
+            </select>
+            <span className="select-chevron" aria-hidden>▾</span>
+          </div>
         </div>
 
         {loginMode === 'otp' ? (
@@ -344,28 +345,15 @@ export default function LoginPage() {
             {success && (<div className="success-message">{success}</div>)}
 
             <div className="form-group">
-              <label htmlFor="urn">URN</label>
+              <label htmlFor="urnCombined">URN and Last 4 Digits of ID (no separator)</label>
               <input
                 type="text"
-                id="urn"
-                value={urn}
-                onChange={(e) => setUrn(e.target.value)}
+                id="urnCombined"
+                value={urnCombined}
+                onChange={(e) => setUrnCombined(e.target.value)}
                 required
                 disabled={loading}
-                placeholder="Enter your URN"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="dob">Date of Birth (DDMMYYYY)</label>
-              <input
-                type="password"
-                id="dob"
-                value={dob}
-                onChange={(e) => setDob(e.target.value)}
-                required
-                disabled={loading}
-                placeholder="e.g. DDMMYYYY"
+                placeholder="e.g. 0001231234"
               />
             </div>
 
@@ -570,11 +558,43 @@ export default function LoginPage() {
           margin: 0 0 8px 0;
         }
 
-
-        .login-switch {
-          display: flex;
-          gap: 10px;
+        /* Centered, full-width dropdown */
+        .login-select {
           margin: 10px 0 20px 0;
+          width: 100%;
+        }
+        .select-wrapper {
+          position: relative;
+          width: 100%;
+        }
+        .login-select-control {
+          width: 100%;
+          padding: 12px 40px 12px 12px;
+          border: 2px solid #e5e7eb; /* slate-200 */
+          border-radius: 8px;
+          font-size: 15px;
+          background-color: #fff;
+          color: #111827; /* gray-900 */
+          transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+          appearance: none;
+        }
+        .login-select-control:hover {
+          border-color: #a5b4fc; /* indigo-300 */
+        }
+        .login-select-control:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+        .select-chevron {
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          pointer-events: none;
+          color: #667eea;
+          font-size: 14px;
+          line-height: 1;
         }
 
         .login-tab {
@@ -615,6 +635,9 @@ export default function LoginPage() {
         @media (max-width: 480px) {
           .auth-card {
             padding: 30px 20px;
+          }
+          .login-select-control {
+            max-width: 100%;
           }
         }
       `}</style>

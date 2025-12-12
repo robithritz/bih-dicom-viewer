@@ -32,17 +32,20 @@ model Otp {
 
 // Patient model for patient authentication and file access (existing table)
 model Patient {
-  idPatients BigInt     @id @default(autoincrement()) @map("id_patients") @db.UnsignedBigInt
-  urn        String     @unique @db.VarChar(10)
-  psid       String     @unique @db.VarChar(10)
-  lastName   String     @map("last_name") @db.VarChar(255)
-  firstName  String     @map("first_name") @db.VarChar(255)
-  email      String?    @db.VarChar(255)
-  sex        PatientSex
-  age        Int
-  dob        String     @db.VarChar(255)
-  createdAt  DateTime?  @default(now()) @map("created_at")
-  updatedAt  DateTime?  @updatedAt @map("updated_at")
+  idPatients   BigInt     @id @default(autoincrement()) @map("id_patients") @db.UnsignedBigInt
+  urn          String     @unique @db.VarChar(10)
+  psid         String     @unique @db.VarChar(10)
+  lastName     String     @map("last_name") @db.VarChar(255)
+  firstName    String     @map("first_name") @db.VarChar(255)
+  email        String?    @db.VarChar(255)
+  sex          PatientSex
+  age          Int
+  dob          String     @db.VarChar(255)
+  createdAt    DateTime?  @default(now()) @map("created_at")
+  updatedAt    DateTime?  @updatedAt @map("updated_at")
+  nik          String?    @db.VarChar(100)
+  passport_num String?    @db.VarChar(100)
+  kitas_num    String?    @db.VarChar(100)
 
   // Relationship to DICOM studies
   dicomStudies DicomStudy[]
