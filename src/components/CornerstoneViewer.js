@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Toolbar from './Toolbar';
 import FileBrowser from './FileBrowser';
 
-export default function CornerstoneViewer({ filename, metadata, isAdmin = false, onFileBrowserToggle }) {
+export default function CornerstoneViewer({ filename, metadata, isAdmin = false, isPublic = false, publicToken = null, onFileBrowserToggle }) {
   const elementRef = useRef(null);
   const router = useRouter();
   const [cornerstone, setCornerstone] = useState(null);
@@ -196,15 +196,15 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
           }
         },
         beforeSend: function (xhr) {
-          // Add authorization header for DICOM file requests
-          const token = isAdmin
-            ? localStorage.getItem('admin-auth-token')
-            : localStorage.getItem('auth-token');
-
-          if (token) {
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          // Public mode: do not attach Authorization header
+          if (!isPublic) {
+            const token = isAdmin
+              ? localStorage.getItem('admin-auth-token')
+              : localStorage.getItem('auth-token');
+            if (token) {
+              xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            }
           }
-
           // Add cache headers for better performance
           xhr.setRequestHeader('Cache-Control', 'public, max-age=3600');
         }
@@ -298,9 +298,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       setToolsReady(false);
       setLoadingProgress(10);
 
+      const base = process.env.NEXT_PUBLIC_APP_URL;
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(filename)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(filename)}`;
+        ? `${base}/api/admin/dicom-file/${encodeURIComponent(filename)}`
+        : (isPublic && publicToken)
+          ? `${base}/api/public/dicom-file/${encodeURIComponent(publicToken)}/${encodeURIComponent(filename)}`
+          : `${base}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}`;
 
       setLoadingProgress(25);
@@ -624,17 +627,21 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   // Load study files for navigation
   const loadStudyFiles = async () => {
     try {
+      const base = process.env.NEXT_PUBLIC_APP_URL;
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/study-files/${encodeURIComponent(filename)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/study-files/${encodeURIComponent(filename)}`;
+        ? `${base}/api/admin/study-files/${encodeURIComponent(filename)}`
+        : (isPublic && publicToken)
+          ? `${base}/api/public/study-files/${encodeURIComponent(publicToken)}/${encodeURIComponent(filename)}`
+          : `${base}/api/study-files/${encodeURIComponent(filename)}`;
 
-      const token = isAdmin
-        ? `Bearer ${localStorage.getItem('admin-auth-token')}`
-        : `Bearer ${localStorage.getItem('auth-token')}`;
+      const headers = {};
+      if (!isPublic) {
+        headers['Authorization'] = isAdmin
+          ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+          : `Bearer ${localStorage.getItem('auth-token')}`;
+      }
 
-      const response = await fetch(apiPath, {
-        headers: { 'Authorization': token }
-      });
+      const response = await fetch(apiPath, { headers });
 
       if (response.ok) {
         const data = await response.json();
@@ -770,9 +777,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
           } else {
             // Load directly without metadata call; cornerstone caches the image
+            const base = process.env.NEXT_PUBLIC_APP_URL;
             const imageApiPath = isAdmin
-              ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
-              : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(targetFile.name)}`;
+              ? `${base}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
+              : (isPublic && publicToken)
+                ? `${base}/api/public/dicom-file/${encodeURIComponent(publicToken)}/${encodeURIComponent(targetFile.name)}`
+                : `${base}/api/dicom-file/${encodeURIComponent(targetFile.name)}`;
             const imageIdBase = `wadouri:${imageApiPath}`;
 
             // Load first frame (or single frame) and detect total frames from dataset
@@ -892,9 +902,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
     try {
       // Load image directly (no separate metadata call)
+      const base = process.env.NEXT_PUBLIC_APP_URL;
       const imageApiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(file.name)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(file.name)}`;
+        ? `${base}/api/admin/dicom-file/${encodeURIComponent(file.name)}`
+        : (isPublic && publicToken)
+          ? `${base}/api/public/dicom-file/${encodeURIComponent(publicToken)}/${encodeURIComponent(file.name)}`
+          : `${base}/api/dicom-file/${encodeURIComponent(file.name)}`;
 
       const imageIdBase = `wadouri:${imageApiPath}`;
       const image = await cornerstone.loadAndCacheImage(imageIdBase);
@@ -945,9 +958,12 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     try {
       const currentSeries = seriesData[currentSeriesIndex];
       const currentFileName = currentSeries?.files?.[currentSeriesFileIndex]?.name || filename;
+      const base = process.env.NEXT_PUBLIC_APP_URL;
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-file/${encodeURIComponent(currentFileName)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-file/${encodeURIComponent(currentFileName)}`;
+        ? `${base}/api/admin/dicom-file/${encodeURIComponent(currentFileName)}`
+        : (isPublic && publicToken)
+          ? `${base}/api/public/dicom-file/${encodeURIComponent(publicToken)}/${encodeURIComponent(currentFileName)}`
+          : `${base}/api/dicom-file/${encodeURIComponent(currentFileName)}`;
       const imageId = `wadouri:${apiPath}#frame=${frameIndex}`;
       const image = await cornerstoneRef.current.loadAndCacheImage(imageId);
 
@@ -1127,7 +1143,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       } else if (e.key === 'ArrowLeft' && seriesData.length > 0 && currentSeriesFileIndex > 0) {
         e.preventDefault();
         navigateToFileInSeries(currentSeriesFileIndex - 1);
-      } else if (e.key === 'ArrowRight' && seriesData.length > 0 && currentSeriesFileIndex < (seriesData[currentSeriesIndex]?.files.length - 1 || 0)) {
+      } else if (e.key === 'ArrowRight' && seriesData.length > 0 && currentSeriesFileIndex < ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)) {
         e.preventDefault();
         navigateToFileInSeries(currentSeriesFileIndex + 1);
       }
@@ -1236,6 +1252,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
         {showFileBrowser && (
           <FileBrowser
             isAdmin={isAdmin}
+            isPublic={isPublic}
+            publicToken={publicToken}
             patientId={filename.includes('/') ? filename.split('/')[0].split('_')[0] : filename} // Extract patient ID from folder name
             currentFile={filename}
             activeSeriesIndex={currentSeriesIndex}
@@ -1490,11 +1508,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
               {/* Next file in series */}
               <button
                 onClick={goToNextFileInSeries}
-                disabled={currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)}
+                disabled={currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)}
                 className={`
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg
-                  ${currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)
+                  ${currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)
                     ? 'bg-gray-400 cursor-not-allowed opacity-50'
                     : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
                   text-white text-xl font-bold
@@ -1509,7 +1527,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
 
           {/* Mobile Series File Navigation (clean buttons) */}
-          {isMobile && seriesData.length > 0 && seriesData[currentSeriesIndex]?.files.length > 1 && (
+          {isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
               <button
                 onClick={() => navigateToFileInSeries(currentSeriesFileIndex - 1)}
@@ -1530,11 +1548,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
               <button
                 onClick={() => navigateToFileInSeries(currentSeriesFileIndex + 1)}
-                disabled={currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)}
+                disabled={currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)}
                 className={`
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg
-                  ${currentSeriesFileIndex === (seriesData[currentSeriesIndex]?.files.length - 1)
+                  ${currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)
                     ? 'bg-gray-400 cursor-not-allowed opacity-50'
                     : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
                   text-white text-xl font-bold

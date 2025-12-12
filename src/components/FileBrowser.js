@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function FileBrowser({ currentFile, onFileSelect, onClose, patientId, isAdmin, activeSeriesIndex = null }) {
+export default function FileBrowser({ currentFile, onFileSelect, onClose, patientId, isAdmin, isPublic = false, publicToken = null, activeSeriesIndex = null }) {
   const [series, setSeries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -8,7 +8,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
 
   useEffect(() => {
     fetchFiles();
-  }, [currentFile]); // Refetch when current file changes
+  }, [currentFile, isPublic, publicToken, isAdmin]); // Refetch when dependencies change
 
   const fetchFiles = async () => {
     if (!currentFile) {
@@ -19,22 +19,24 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
 
     try {
       setLoading(true);
-      // Use the new study-based API that filters files by the same study as currentFile
+      const base = process.env.NEXT_PUBLIC_APP_URL;
+      // Use the study-based API scoped to the current file
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/study-files/${encodeURIComponent(currentFile)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/study-files/${encodeURIComponent(currentFile)}`;
+        ? `${base}/api/admin/study-files/${encodeURIComponent(currentFile)}`
+        : (isPublic && publicToken)
+          ? `${base}/api/public/study-files/${encodeURIComponent(publicToken)}/${encodeURIComponent(currentFile)}`
+          : `${base}/api/study-files/${encodeURIComponent(currentFile)}`;
 
-      const token = isAdmin
-        ? `Bearer ${localStorage.getItem('admin-auth-token')}`
-        : `Bearer ${localStorage.getItem('auth-token')}`;
+      console.log('Fetching study files for:', currentFile, '->', apiPath);
 
-      console.log('Fetching study files for:', currentFile);
+      const headers = {};
+      if (!isPublic) {
+        headers['Authorization'] = isAdmin
+          ? `Bearer ${localStorage.getItem('admin-auth-token')}`
+          : `Bearer ${localStorage.getItem('auth-token')}`;
+      }
 
-      const response = await fetch(apiPath, {
-        headers: {
-          'Authorization': token
-        }
-      });
+      const response = await fetch(apiPath, { headers });
 
       if (!response.ok) {
         throw new Error('Failed to fetch study files');
