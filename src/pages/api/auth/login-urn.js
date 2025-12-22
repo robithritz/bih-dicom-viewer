@@ -19,7 +19,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid input format' });
       }
       const tail = s.slice(-4);
-      if (!/^\d{4}$/.test(tail)) {
+      if (!/^[A-Za-z0-9]{4}$/.test(tail)) {
         return res.status(400).json({ error: 'Invalid input format' });
       }
       urn = s.slice(0, -4).trim();
