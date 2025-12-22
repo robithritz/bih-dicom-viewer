@@ -25,6 +25,7 @@ export default async function handler(req, res) {
       urn = s.slice(0, -4).trim();
       last4Id = tail;
     }
+    console.log('Login request for:', urn, 'with last 4 digits:', last4Id);
 
     if (!urn || !last4Id) {
       return res.status(400).json({ error: 'URN and last 4 digits of ID are required' });
@@ -37,17 +38,19 @@ export default async function handler(req, res) {
     if (!patient) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    console.log('Found patient:', patient);
 
     // Verify last 4 digits of ID using priority: nik -> passport_num -> kitas_num
     const firstId = [patient.nik, patient.passport_num, patient.kitas_num].find((v) => (v || '').toString().trim().length > 0);
 
+    console.log('First ID:', firstId);
     if (!firstId) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const onlyDigits = (s) => (s || '').toString().replace(/\D/g, '');
-    const expectedLast4 = onlyDigits(firstId).slice(-4);
-    const providedLast4 = onlyDigits(last4Id);
+    const fourLastChars = (s) => (s || '').toString().trim().slice(-4);
+    const expectedLast4 = fourLastChars(firstId);
+    const providedLast4 = fourLastChars(last4Id);
 
     if (!expectedLast4 || expectedLast4 !== providedLast4) {
       return res.status(401).json({ error: 'Invalid credentials' });
