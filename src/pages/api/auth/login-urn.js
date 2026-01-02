@@ -59,12 +59,14 @@ export default async function handler(req, res) {
     // Compute multi-patient context if email exists
     let isMultiPatient = false;
     let multiUrn = [];
-    if (patient.email) {
-      const emailNorm = patient.email.toLowerCase();
-      const siblings = await prisma.patient.findMany({ where: { email: emailNorm } });
-      isMultiPatient = siblings.length > 1;
-      multiUrn = siblings.map((p) => p.urn);
-    }
+
+    // disable multi-urn for login via urn 
+    // if (patient.email) {
+    //   const emailNorm = patient.email.toLowerCase();
+    //   const siblings = await prisma.patient.findMany({ where: { email: emailNorm } });
+    //   isMultiPatient = siblings.length > 1;
+    //   multiUrn = siblings.map((p) => p.urn);
+    // }
 
     // Sign JWT similar to OTP flow
     const token = jwt.sign(
