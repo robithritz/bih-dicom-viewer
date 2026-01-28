@@ -3,50 +3,52 @@ import path from 'path';
 import dicomParser from 'dicom-parser';
 
 export const DICOM_DIR = path.join(process.cwd(), 'DICOM');
+export const DICOM2_DIR = path.join(process.cwd(), 'DICOM2');
 
 export function getDicomFiles(folderName = null) {
   try {
-    if (folderName) {
-      // Look for files in specific folder (could be patient ID or full folder name like "000012_0001")
-      const targetDir = path.join(DICOM_DIR, folderName);
-      if (fs.existsSync(targetDir)) {
-        const files = fs.readdirSync(targetDir);
-        return files
-          .filter(file => file.toLowerCase().endsWith('.dcm') || file.toLowerCase().endsWith('.dicom'))
-          .map(file => path.join(folderName, file)); // Include folder in path
-      }
-      return [];
-    } else {
-      // Get all DICOM files from all directories
-      const allFiles = [];
-
-      // Get files from root DICOM directory
-      if (fs.existsSync(DICOM_DIR)) {
-        const rootFiles = fs.readdirSync(DICOM_DIR);
-        rootFiles.forEach(item => {
-          const itemPath = path.join(DICOM_DIR, item);
-          const stat = fs.statSync(itemPath);
-
-          if (stat.isFile() && (item.toLowerCase().endsWith('.dcm') || item.toLowerCase().endsWith('.dicom'))) {
-            allFiles.push(item);
-          } else if (stat.isDirectory()) {
-            // Check patient subdirectories
-            try {
-              const subFiles = fs.readdirSync(itemPath);
-              subFiles.forEach(subFile => {
-                if (subFile.toLowerCase().endsWith('.dcm') || subFile.toLowerCase().endsWith('.dicom')) {
-                  allFiles.push(path.join(item, subFile));
-                }
-              });
-            } catch (err) {
-              console.warn(`Error reading subdirectory ${item}:`, err);
+    const readFromBase = (baseDir) => {
+      if (folderName) {
+        const targetDir = path.join(baseDir, folderName);
+        if (fs.existsSync(targetDir)) {
+          const files = fs.readdirSync(targetDir);
+          return files
+            .filter(file => file.toLowerCase().endsWith('.dcm') || file.toLowerCase().endsWith('.dicom'))
+            .map(file => path.join(folderName, file));
+        }
+        return [];
+      } else {
+        const collected = [];
+        if (fs.existsSync(baseDir)) {
+          const rootFiles = fs.readdirSync(baseDir);
+          rootFiles.forEach(item => {
+            const itemPath = path.join(baseDir, item);
+            const stat = fs.statSync(itemPath);
+            if (stat.isFile() && (item.toLowerCase().endsWith('.dcm') || item.toLowerCase().endsWith('.dicom'))) {
+              collected.push(item);
+            } else if (stat.isDirectory()) {
+              try {
+                const subFiles = fs.readdirSync(itemPath);
+                subFiles.forEach(subFile => {
+                  if (subFile.toLowerCase().endsWith('.dcm') || subFile.toLowerCase().endsWith('.dicom')) {
+                    collected.push(path.join(item, subFile));
+                  }
+                });
+              } catch (err) {
+                console.warn(`Error reading subdirectory ${item}:`, err);
+              }
             }
-          }
-        });
+          });
+        }
+        return collected;
       }
+    };
 
-      return allFiles;
-    }
+    // Prefer DICOM_DIR; if empty, fall back to DICOM2_DIR
+    const primary = readFromBase(DICOM_DIR);
+    if (primary && primary.length > 0) return primary;
+    const secondary = readFromBase(DICOM2_DIR);
+    return secondary;
   } catch (error) {
     console.error('Error reading DICOM directory:', error);
     return [];
@@ -60,36 +62,29 @@ export function getDicomFiles(folderName = null) {
  */
 export function getDicomFilesByPatientId(patientId) {
   try {
-    const allFiles = [];
-
-    if (!fs.existsSync(DICOM_DIR)) {
-      return [];
-    }
-
-    const entries = fs.readdirSync(DICOM_DIR, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
+    const scanBase = (baseDir) => {
+      const results = [];
+      if (!fs.existsSync(baseDir)) return results;
+      const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
         const folderName = entry.name;
-
-        // Check if this folder belongs to the patient
-        // Handle both old format (just patient ID) and new format (patient_episode)
-        const folderPatientId = folderName.split('_')[0]; // Get patient ID part
-
+        const folderPatientId = folderName.split('_')[0];
         if (folderPatientId === patientId) {
-          const folderPath = path.join(DICOM_DIR, folderName);
+          const folderPath = path.join(baseDir, folderName);
           const files = fs.readdirSync(folderPath);
-
           const dicomFiles = files
             .filter(file => file.toLowerCase().endsWith('.dcm') || file.toLowerCase().endsWith('.dicom'))
-            .map(file => path.join(folderName, file)); // Include full folder name in path
-
-          allFiles.push(...dicomFiles);
+            .map(file => path.join(folderName, file));
+          results.push(...dicomFiles);
         }
       }
-    }
+      return results;
+    };
 
-    return allFiles;
+    const primary = scanBase(DICOM_DIR);
+    if (primary.length > 0) return primary;
+    return scanBase(DICOM2_DIR);
   } catch (error) {
     console.error('Error reading DICOM files by patient ID:', error);
     return [];
@@ -98,9 +93,15 @@ export function getDicomFilesByPatientId(patientId) {
 
 export function parseDicomFile(filename) {
   try {
-    const filePath = path.join(DICOM_DIR, filename);
+    // Try primary directory first
+    let filePath = path.join(DICOM_DIR, filename);
     if (!fs.existsSync(filePath)) {
-      throw new Error('File not found');
+      // Fallback to secondary directory
+      const altPath = path.join(DICOM2_DIR, filename);
+      if (!fs.existsSync(altPath)) {
+        throw new Error('File not found');
+      }
+      filePath = altPath;
     }
 
     const dicomFileAsBuffer = fs.readFileSync(filePath);

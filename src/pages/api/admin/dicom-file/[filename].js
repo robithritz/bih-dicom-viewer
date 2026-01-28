@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { DICOM_DIR } from '../../../../lib/dicom';
+import { DICOM_DIR, DICOM2_DIR } from '../../../../lib/dicom';
 import { requireAdminAuth } from '../../../../lib/auth-middleware';
 
 async function handler(req, res) {
@@ -33,9 +33,16 @@ async function handler(req, res) {
       filePath = path.join(DICOM_DIR, filename);
     }
 
+    // Fallback: try DICOM2_DIR if not found in DICOM_DIR
     if (!fs.existsSync(filePath)) {
-      console.error('DICOM file not found:', filePath);
-      return res.status(404).json({ error: 'File not found' });
+      const altPath = filename.includes('/')
+        ? path.join(DICOM2_DIR, patientId, actualFilename)
+        : path.join(DICOM2_DIR, filename);
+      if (!fs.existsSync(altPath)) {
+        console.error('DICOM file not found in both DICOM and DICOM2:', filePath, '||', altPath);
+        return res.status(404).json({ error: 'File not found' });
+      }
+      filePath = altPath;
     }
 
     // Set appropriate headers for DICOM files

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { DICOM_DIR } from '../../../lib/dicom';
+import { DICOM_DIR, DICOM2_DIR } from '../../../lib/dicom';
 import { requireAuth, validatePatientFileAccess } from '../../../lib/auth-middleware';
 
 async function handler(req, res) {
@@ -26,15 +26,20 @@ async function handler(req, res) {
       return res.status(403).json({ error: validation.error });
     }
 
-    // Use patient-specific file path
-    const filePath = path.join(DICOM_DIR, validation.patientFilePath);
+    // Use patient-specific file path with fallback to DICOM2
+    let filePath = path.join(DICOM_DIR, validation.patientFilePath);
+    if (!fs.existsSync(filePath)) {
+      const altPath = path.join(DICOM2_DIR, validation.patientFilePath);
+      if (!fs.existsSync(altPath)) {
+        console.error('DICOM file not found in both DICOM and DICOM2:', filePath, '||', altPath);
+        return res.status(404).json({ error: 'File not found' });
+      }
+      filePath = altPath;
+    }
 
     console.log('Serving DICOM file for patient:', req.patient.patientId, 'filename:', filename, 'from path:', filePath);
 
-    if (!fs.existsSync(filePath)) {
-      console.error('DICOM file not found:', filePath);
-      return res.status(404).json({ error: 'File not found' });
-    }
+    // At this point filePath exists
 
     // Set appropriate headers for DICOM files
     res.setHeader('Content-Type', 'application/dicom');
