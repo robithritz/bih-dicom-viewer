@@ -58,6 +58,15 @@ async function handler(req, res) {
         const fileStudyUID = fileDataSet.string('x0020000d');
 
         if (fileStudyUID === currentStudyUID) {
+          // Skip non-image objects (e.g., PR/SR) by requiring pixel data and valid geometry
+          const hasPixel = !!(fileDataSet.elements && fileDataSet.elements.x7fe00010);
+          const rows = fileDataSet.uint16('x00280010') || 0;
+          const columns = fileDataSet.uint16('x00280011') || 0;
+
+          if (!hasPixel || rows === 0 || columns === 0) {
+            continue; // skip non-displayable objects like PR/SR
+          }
+
           // Get additional metadata for sorting
           const seriesNumber = parseInt(fileDataSet.string('x00200011') || '0');
           const instanceNumber = parseInt(fileDataSet.string('x00200013') || '0');

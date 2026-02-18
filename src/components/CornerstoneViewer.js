@@ -306,13 +306,77 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
           : `${base}/api/dicom-file/${encodeURIComponent(filename)}`;
       const imageId = `wadouri:${apiPath}`;
 
+      // Preflight: check if this file is displayable; if not, auto-skip to first valid image
+      const infoPath = isAdmin
+        ? `${base}/api/admin/dicom-info/${encodeURIComponent(filename)}`
+        : (isPublic && publicToken)
+          ? `${base}/api/public/dicom-info/${encodeURIComponent(publicToken)}/${encodeURIComponent(filename)}`
+          : `${base}/api/dicom-info/${encodeURIComponent(filename)}`;
+
+      const authHeaders = {};
+      if (!isPublic) {
+        const token = isAdmin
+          ? localStorage.getItem('admin-auth-token')
+          : localStorage.getItem('auth-token');
+        if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+      }
+
+      const tryAutoSkip = async () => {
+        try {
+          const studyFilesPath = isAdmin
+            ? `${base}/api/admin/study-files/${encodeURIComponent(filename)}`
+            : (isPublic && publicToken)
+              ? `${base}/api/public/study-files/${encodeURIComponent(publicToken)}/${encodeURIComponent(filename)}`
+              : `${base}/api/study-files/${encodeURIComponent(filename)}`;
+
+          const resp = await fetch(studyFilesPath, { headers: authHeaders });
+          if (resp.ok) {
+            const data = await resp.json();
+            const firstSeries = Array.isArray(data.series) ? data.series[0] : null;
+            const firstFile = firstSeries?.files?.[0];
+            if (firstFile?.name) {
+              const viewerPath = isAdmin
+                ? `${base}/admin/viewer/${encodeURIComponent(firstFile.name)}`
+                : (isPublic && publicToken)
+                  ? `${base}/public/viewer/${encodeURIComponent(publicToken)}`
+                  : `${base}/viewer/${encodeURIComponent(firstFile.name)}`;
+              console.warn('Auto-skipping non-image DICOM; opening:', firstFile.name);
+              window.location.href = viewerPath;
+              return true;
+            }
+          }
+          console.warn('Auto-skip: no displayable images found in this study');
+        } catch (e) {
+          console.warn('Auto-skip failed:', e);
+        }
+        return false;
+      };
+
+      let isLikelyNonImage = false;
+      try {
+        const infoResp = await fetch(infoPath, { headers: authHeaders });
+        if (infoResp.ok) {
+          const meta = await infoResp.json();
+          const rows = parseInt(meta?.rows || 0, 10);
+          const columns = parseInt(meta?.columns || 0, 10);
+          const modality = meta?.modality || '';
+          isLikelyNonImage = (!rows || !columns || modality === 'PR' || modality === 'SR');
+          if (isLikelyNonImage) {
+            const skipped = await tryAutoSkip();
+            if (skipped) return; // Navigated away
+          }
+        }
+      } catch (e) {
+        console.warn('Preflight dicom-info failed:', e);
+      }
+
       setLoadingProgress(25);
 
       // Enhanced multi-frame detection
       let frames = parseInt(metadata?.numberOfFrames || '1');
 
       // For large files that show only 1 frame, try alternative detection
-      if (frames === 1) {
+      if (frames === 1 && !isLikelyNonImage) {
 
         // Try to detect frames from loaded image data
         try {
@@ -345,7 +409,17 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
       setLoadingProgress(60);
 
-      const image = await cornerstone.loadAndCacheImage(finalImageId);
+      let image;
+      try {
+        image = await cornerstone.loadAndCacheImage(finalImageId);
+      } catch (loadErr) {
+        const msg = (loadErr && loadErr.message) || '';
+        if (/does not contain image data/i.test(msg) || isLikelyNonImage) {
+          const skipped = await tryAutoSkip();
+          if (skipped) return; // Navigated away
+        }
+        throw loadErr;
+      }
       setLoadingProgress(80);
 
       cornerstone.displayImage(elementRef.current, image);
