@@ -9,7 +9,9 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 m-0 p-5;
+    @apply text-gray-900 m-0 min-h-screen;
+    /* Global soft gradient background to match login */
+    /* background: linear-gradient(180deg, #D4E8F1 0%, #E1F0E8 50%, #DAECD9 100%); */
     padding: 0;
   }
 }
@@ -180,6 +182,158 @@
 
   .instance-number {
     @apply bg-blue-600 text-white py-0.5 px-2 rounded-full text-xs font-bold;
+  }
+
+  /* Patient portal navbar + hero */
+  .portal-navbar {
+    @apply bg-white border-b border-gray-200 shadow-sm;
+  }
+
+  .navbar-inner {
+    @apply max-w-6xl mx-auto px-4 py-3 flex items-center justify-between;
+  }
+
+  .navbar-brand {
+    @apply flex items-center gap-3;
+  }
+
+  .brand-text {
+    @apply leading-tight;
+  }
+
+  .brand-title {
+    @apply text-lg font-semibold text-gray-900;
+    color: #1D5A8A;
+  }
+
+  .brand-subtitle {
+    @apply text-sm text-gray-500;
+  }
+
+  .portal-logout {
+    @apply inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200;
+    @apply bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 hover:border-gray-300;
+  }
+
+  .portal-hero {
+    @apply py-6 md:py-8;
+    background: transparent;
+    /* body provides the gradient */
+  }
+
+  .welcome-card {
+    @apply bg-white rounded-xl shadow-md p-5 md:p-6 mb-5;
+  }
+
+  .welcome-title {
+    @apply text-2xl font-semibold text-gray-900;
+    color: #1D5A8A;
+  }
+
+  .welcome-desc {
+    @apply mt-1 text-gray-600;
+  }
+
+  .patient-card {
+    @apply bg-white rounded-xl shadow-md p-5 md:p-6;
+  }
+
+  .patient-title {
+    @apply text-lg font-semibold text-gray-900 mb-4;
+  }
+
+  .patient-grid-3 {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-4 mb-3;
+  }
+
+  .patient-grid-2 {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-4;
+  }
+
+  .patient-field {
+    @apply flex flex-col;
+  }
+
+  .patient-label {
+    @apply text-xs uppercase tracking-wide text-gray-500;
+  }
+
+  .patient-value {
+    @apply text-base font-medium text-gray-900 mt-0.5;
+  }
+
+  .bg-soft-gradient {
+    background: linear-gradient(180deg, #D4E8F1 0%, #E1F0E8 50%, #DAECD9 100%);
+  }
+
+  /* Action buttons for additional card */
+  .btn-apply {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors duration-200;
+    background-color: #5D9CAD;
+  }
+
+  .btn-apply:hover {
+    background-color: #4f8d9d;
+  }
+
+  .btn-reset {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors duration-200;
+    background-color: #6A7282;
+  }
+
+  .btn-reset:hover {
+    background-color: #5c6372;
+  }
+
+  .color-black {
+    color: black;
+  }
+
+  /* Date range filter styles */
+  .filter-label {
+    @apply text-sm font-medium text-gray-700;
+  }
+
+  .filter-input-wrap {
+    @apply relative flex-1;
+  }
+
+  .filter-input {
+    @apply w-full py-2.5 pl-3 pr-9 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200;
+  }
+
+  .filter-icon {
+    @apply absolute right-3 top-1/2 -translate-y-1/2 text-gray-500;
+    pointer-events: none;
+  }
+
+  .filter-select-wrap {
+    @apply relative;
+  }
+
+  .filter-select {
+    @apply py-2.5 pl-3 pr-8 border border-gray-300 rounded-lg bg-white text-gray-900;
+    appearance: none;
+    min-width: 150px;
+  }
+
+  .filter-caret {
+    @apply absolute right-3 top-1/2 -translate-y-1/2 text-gray-500;
+    pointer-events: none;
+  }
+
+  /* Ensure react-datepicker input spans full width so the icon aligns inside */
+  .react-datepicker-wrapper {
+    width: 100%;
+  }
+
+  .react-datepicker__input-container {
+    width: 100%;
+    display: block;
+  }
+
+  .react-datepicker__input-container input {
+    width: 100%;
   }
 }
 
