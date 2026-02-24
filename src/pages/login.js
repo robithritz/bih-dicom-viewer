@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +18,103 @@ export default function LoginPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginMode, setLoginMode] = useState(''); // 'otp' | 'urn'
   const [urnCombined, setUrnCombined] = useState(''); // "URN and last 4 digits of ID"
+  const [urnNumber, setUrnNumber] = useState('');
+  const [idLast4, setIdLast4] = useState('');
+  // Custom dropdown (select login method)
+  const selectRef = useRef(null);
+  const [selectOpen, setSelectOpen] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1); // 0: Email, 1: URN
+  const [confirmSwitchOpen, setConfirmSwitchOpen] = useState(false);
+  const [pendingLoginMode, setPendingLoginMode] = useState('');
+
+  const optionList = [
+    { value: 'otp', label: 'Email' },
+    { value: 'urn', label: 'URN' },
+  ];
+
+  const labelForValue = (val) => (val === 'otp' ? 'Email' : val === 'urn' ? 'URN' : 'Select login method');
+
+  const handleSelectLoginMode = (val) => {
+    setLoginMode(val);
+    setError('');
+    setSuccess('');
+    setStep('email');
+    setUrnCombined('');
+    setUrnNumber('');
+    setIdLast4('');
+    setSelectOpen(false);
+  };
+
+  const requestSwitchLoginMode = (val) => {
+    // If user is in OTP verification step and wants to switch to URN, confirm first
+    if (loginMode === 'otp' && step === 'otp' && val === 'urn') {
+      setPendingLoginMode(val);
+      setSelectOpen(false);
+      setConfirmSwitchOpen(true);
+      return;
+    }
+    handleSelectLoginMode(val);
+  };
+
+  const confirmSwitch = () => {
+    // Clear OTP-related state and switch
+    setOtp('');
+    setSessionId('');
+    setExpiresAt(null);
+    setTimeLeft(0);
+    setRetryCount(0);
+    setError('');
+    setSuccess('');
+    setStep('email');
+    setUrnCombined('');
+    setUrnNumber('');
+    setIdLast4('');
+    setLoginMode(pendingLoginMode || 'urn');
+    setPendingLoginMode('');
+    setConfirmSwitchOpen(false);
+  };
+
+  const cancelSwitch = () => {
+    setPendingLoginMode('');
+    setConfirmSwitchOpen(false);
+  };
+
+  const onSelectKeyDown = (e) => {
+    const max = optionList.length - 1;
+    if (!selectOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setSelectOpen(true);
+        setHighlightIndex(loginMode === 'urn' ? 1 : 0);
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIndex((i) => (i < max ? i + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIndex((i) => (i > 0 ? i - 1 : max));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const choice = optionList[Math.max(0, highlightIndex)]?.value || optionList[0].value;
+      handleSelectLoginMode(choice);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setSelectOpen(false);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (selectRef.current && !selectRef.current.contains(e.target)) {
+        setSelectOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
 
 
   const { isAuthenticated, loading: authLoading, checkAuth, setUserData } = useAuth();
@@ -193,7 +290,13 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const combined = (urnCombined || '').trim();
+      // Combine URN number + last4 without separator
+      const combined = `${(urnNumber || '').trim()}${(idLast4 || '').trim()}`;
+      if (!combined || (idLast4 || '').length !== 4) {
+        setLoading(false);
+        setError('Please enter your URN and the last 4 digits of your ID');
+        return;
+      }
 
       const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/login-urn', {
         method: 'POST',
@@ -234,34 +337,64 @@ export default function LoginPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h2 className="flex justify-between items-center">
-            <Image src={`${router.basePath}/images/bih-logo.png`} alt="Logo" width={200} height={80} />
-            Patient Login
-          </h2>
-          <h1>
-            Dicom Viewer
-          </h1>
-          <p>Access your medical imaging results</p>
-
+          <div className="logo-wrap">
+            <Image src={`${router.basePath}/images/bih-logo.png`} alt="Bali International Hospital" width={220} height={82} />
+          </div>
+          <h1 className="product-title">Dicom Viewer</h1>
+          <p className="product-sub">Access your medical imaging results</p>
         </div>
 
         <div className="login-label">Select Login Type</div>
 
-        {/* Login method selection (dropdown) */}
+        {/* Login method selection (custom dropdown to match mock) */}
         <div className="login-select">
-          <div className="select-wrapper">
-            <select
-              id="loginMode"
-              value={loginMode}
-              onChange={(e) => { setLoginMode(e.target.value); setError(''); setSuccess(''); setStep('email'); setUrnCombined(''); }}
-              className="login-select-control"
-              aria-label="Select login method"
+          <div className="custom-select" ref={selectRef}>
+            <button
+              type="button"
+              className="custom-select-button"
+              aria-haspopup="listbox"
+              aria-expanded={selectOpen}
+              aria-controls="login-mode-listbox"
+              onClick={() => setSelectOpen((o) => !o)}
+              onKeyDown={(e) => {
+                if (!selectOpen && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown')) {
+                  e.preventDefault();
+                  setSelectOpen(true);
+                  setHighlightIndex(loginMode === 'urn' ? 1 : 0);
+                } else if (selectOpen) {
+                  const max = optionList.length - 1;
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIndex((i) => (i < max ? i + 1 : 0)); }
+                  else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIndex((i) => (i > 0 ? i - 1 : max)); }
+                  else if (e.key === 'Enter') { e.preventDefault(); requestSwitchLoginMode(optionList[Math.max(0, highlightIndex)]?.value || optionList[0].value); }
+                  else if (e.key === 'Escape') { e.preventDefault(); setSelectOpen(false); }
+                }
+              }}
             >
-              <option value="">Select login method</option>
-              <option value="otp">Email</option>
-              <option value="urn">URN</option>
-            </select>
-            <span className="select-chevron" aria-hidden>▾</span>
+              <span>{labelForValue(loginMode)}</span>
+              <span className="select-chevron" aria-hidden>▾</span>
+            </button>
+            {selectOpen && (
+              <div id="login-mode-listbox" role="listbox" className="custom-select-menu">
+                <div
+                  role="option"
+                  aria-selected={loginMode === 'otp'}
+                  className={`custom-select-option ${highlightIndex === 0 ? 'active' : ''} ${loginMode === 'otp' ? 'selected' : ''}`}
+                  onMouseEnter={() => setHighlightIndex(0)}
+                  onClick={() => requestSwitchLoginMode('otp')}
+                >
+                  Email
+                </div>
+                <div
+                  role="option"
+                  aria-selected={loginMode === 'urn'}
+                  className={`custom-select-option ${highlightIndex === 1 ? 'active' : ''} ${loginMode === 'urn' ? 'selected' : ''}`}
+                  onMouseEnter={() => setHighlightIndex(1)}
+                  onClick={() => requestSwitchLoginMode('urn')}
+                >
+                  URN
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -280,33 +413,31 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={loading}
-                  placeholder="Enter your registered email"
+                  placeholder="Enter your email"
                 />
               </div>
 
               <button type="submit" className="auth-button" disabled={loading}>
-                {loading ? 'Sending Code...' : 'Send Verification Code'}
+                {loading ? 'Sending...' : 'Send OTP'}
               </button>
             </form>
           ) : (
             <form onSubmit={handleOtpSubmit} className="auth-form">
               {error && (<div className="error-message">{error}</div>)}
-              {success && (<div className="success-message">{success}</div>)}
 
-              <div className="otp-info">
-                <p>We've sent a 6-digit verification code to:</p>
-                <strong>{email}</strong>
-                <p className="otp-expires">
-                  {timeLeft > 0 ? (
-                    <>Code expires in {formatTimeLeft(timeLeft)}</>
-                  ) : (
-                    <span style={{ color: '#e74c3c' }}>Code has expired</span>
-                  )}
-                </p>
+              <div className="form-group">
+                <label htmlFor="emailDisplay">Email Address</label>
+                <input
+                  type="email"
+                  id="emailDisplay"
+                  value={email}
+                  readOnly
+                  disabled
+                />
               </div>
 
               <div className="form-group">
-                <label htmlFor="otp">Verification Code</label>
+                <label htmlFor="otp">OTP Code</label>
                 <input
                   type="text"
                   id="otp"
@@ -314,29 +445,24 @@ export default function LoginPage() {
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
                   disabled={loading}
-                  placeholder="Enter OTP"
+                  placeholder="000000"
                   maxLength="6"
-                  className="otp-input"
                 />
               </div>
 
-              <button type="submit" className="auth-button" disabled={loading || otp.length !== 6}>
-                {loading ? 'Verifying...' : 'Verify & Sign In'}
+              <button
+                type="button"
+                className="change-email-link"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTimeout(handleBackToEmail, 0); }}
+                disabled={loading}
+              >
+                Use different email
               </button>
+              <div className="hint-text">Please check your email for the OTP code</div>
 
-              <div className="otp-actions">
-                <button
-                  type="button"
-                  onClick={handleResendOtp}
-                  disabled={loading || retryCount >= maxRetries || timeLeft > 0}
-                  className="resend-button"
-                  title={timeLeft > 0 ? `Wait ${formatTimeLeft(timeLeft)} before resending` : ''}
-                >
-                  {loading ? 'Sending...' :
-                    timeLeft > 0 ? `Resend Code in ${formatTimeLeft(timeLeft)}` :
-                      `Resend Code (${retryCount}/${maxRetries})`}
-                </button>
-              </div>
+              <button type="submit" className="auth-button" disabled={loading || otp.length !== 6}>
+                {loading ? 'Submitting...' : 'Submit'}
+              </button>
             </form>
           )
         ) : loginMode === 'urn' ? (
@@ -345,20 +471,35 @@ export default function LoginPage() {
             {success && (<div className="success-message">{success}</div>)}
 
             <div className="form-group">
-              <label htmlFor="urnCombined">URN and Last 4 Digits of ID (no separator)</label>
+              <label htmlFor="urnNumber">URN Number</label>
               <input
                 type="text"
-                id="urnCombined"
-                value={urnCombined}
-                onChange={(e) => setUrnCombined(e.target.value)}
+                id="urnNumber"
+                value={urnNumber}
+                onChange={(e) => setUrnNumber(e.target.value)}
                 required
                 disabled={loading}
-                placeholder="e.g. 0001231234"
+                placeholder="Enter your URN number"
               />
             </div>
 
-            <button type="submit" className="auth-button" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+            <div className="form-group">
+              <label htmlFor="idLast4">Last 4 Digits of Identity ID</label>
+              <input
+                type="text"
+                id="idLast4"
+                inputMode="numeric"
+                value={idLast4}
+                onChange={(e) => setIdLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                maxLength="4"
+                required
+                disabled={loading}
+                placeholder="****"
+              />
+            </div>
+
+            <button type="submit" className="auth-button" disabled={loading || !urnNumber || idLast4.length !== 4}>
+              {loading ? 'Submitting...' : 'Submit'}
             </button>
           </form>
         ) : null}
@@ -378,39 +519,66 @@ export default function LoginPage() {
         </div> */}
       </div>
 
+      {confirmSwitchOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="switch-login-title">
+          <div className="modal-card">
+            <div className="modal-body">
+              <div className="modal-icon">!</div>
+              <div>
+                <h3 id="switch-login-title" className="modal-title">Switch Login Method?</h3>
+                <p className="modal-text">You have already sent an OTP to your email.</p>
+                <p className="modal-text">Switching will clear your current progress and you will need to start over.</p>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn-outline" onClick={cancelSwitch}>Cancel</button>
+              <button type="button" className="btn-primary" onClick={confirmSwitch}>Switch Method</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         .auth-container {
           min-height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          /* Figma-like soft gradient background */
+          background: linear-gradient(180deg, #D4E8F1 0%, #E1F0E8 50%, #DAECD9 100%);
           padding: 20px;
         }
 
         .auth-card {
           background: white;
           border-radius: 12px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-          padding: 40px;
+          box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12), 0 3px 10px rgba(15, 23, 42, 0.06);
+          padding: 44px 40px;
           width: 100%;
-          max-width: 400px;
+          max-width: 560px;
         }
 
         .auth-header {
-          text-align: center;
-          margin-bottom: 30px;
+          text-align: left;
+          margin-bottom: 28px;
         }
 
-        .auth-header h1 {
-          margin: 0 0 10px 0;
-          color: #333;
-          font-size: 28px;
+        .logo-wrap {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 10px;
         }
 
-        .auth-header p {
-          margin: 0;
-          color: #666;
+        .product-title {
+          margin: 0 0 6px 0;
+          color: #1D5A8A;
+          font-size: 24px;
+          font-weight: 700;
+        }
+
+        .product-sub {
+          margin: 0 0 18px 0;
+          color: #6b7280; /* slate-500 */
           font-size: 14px;
         }
 
@@ -434,15 +602,22 @@ export default function LoginPage() {
 
         .form-group input {
           padding: 12px;
-          border: 2px solid #ddd;
-          border-radius: 6px;
+          border: 2px solid #e5e7eb; /* gray-200 to match select */
+          border-radius: 10px;
           font-size: 16px;
-          transition: border-color 0.2s;
+          background-color: #fff;
+          color: #111827; /* gray-900 */
+          transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
         }
 
         .form-group input:focus {
           outline: none;
-          border-color: #667eea;
+          border-color: #1f6db2; /* theme blue */
+          box-shadow: 0 0 0 3px rgba(31, 109, 178, 0.15);
+        }
+
+        .form-group input::placeholder {
+          color: #9ca3af; /* gray-400 */
         }
 
         .form-group input:disabled {
@@ -451,20 +626,26 @@ export default function LoginPage() {
         }
 
         .auth-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: #4A90C5;
           color: white;
           border: none;
           padding: 14px;
-          border-radius: 6px;
+          border-radius: 10px;
           font-size: 16px;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: background-color 0.2s, box-shadow 0.2s, transform 0.15s;
         }
 
         .auth-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          background: #3e8bc5ff; /* darken on hover */
+          transform: translateY(-1px);
+          box-shadow: 0 6px 18px rgba(31, 109, 178, 0.35);
+        }
+
+        .auth-button:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(31, 109, 178, 0.25);
         }
 
         .auth-button:disabled {
@@ -516,35 +697,42 @@ export default function LoginPage() {
           font-weight: 500;
         }
 
-        .otp-input {
-          text-align: center;
-          font-size: 24px;
-          font-weight: bold;
-          letter-spacing: 8px;
-          font-family: monospace;
+        /* OTP input now standard field, no special tracking styling */
+
+        .change-email-link {
+          background: transparent;
+          color: #1f6db2;
+          border: none;
+          padding: 0;
+          margin: 2px 0 6px 0;
+          text-align: left;
+          font-size: 14px;
+          cursor: pointer;
         }
 
-        .otp-actions {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          margin-top: 15px;
+        .change-email-link:hover { text-decoration: underline; }
+
+        .hint-text {
+          color: #22a055; /* green hint */
+          font-size: 14px;
+          margin-bottom: 8px;
         }
 
         .resend-button, .back-button {
           background: transparent;
-          color: #667eea;
-          border: 1px solid #667eea;
-          padding: 10px;
-          border-radius: 6px;
+          color: #1f6db2;
+          border: 1px solid #1f6db2;
+          padding: 10px 12px;
+          border-radius: 10px;
           font-size: 14px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
         }
 
         .resend-button:hover:not(:disabled), .back-button:hover:not(:disabled) {
-          background-color: #667eea;
-          color: white;
+          background-color: #1f6db2;
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(31, 109, 178, 0.25);
         }
 
         .resend-button:disabled, .back-button:disabled {
@@ -552,10 +740,10 @@ export default function LoginPage() {
           cursor: not-allowed;
         }
         .login-label {
-          text-align: center;
+          text-align: left;
           font-weight: 600;
-          color: #333;
-          margin: 0 0 8px 0;
+          color: #364153; /* gray-800 */
+          margin: 6px 0 8px 0;
         }
 
         /* Centered, full-width dropdown */
@@ -563,39 +751,72 @@ export default function LoginPage() {
           margin: 10px 0 20px 0;
           width: 100%;
         }
-        .select-wrapper {
+        .custom-select { position: relative; width: 100%; }
+        .custom-select-button {
+          width: 100%; text-align: left;
+          padding: 16px 44px 16px 16px;
+          border: 2px solid #4A90C5;
+          border-radius: 12px;
+          background: #fff; color: #111827;
+          font-size: 16px; font-weight: 500;
+          cursor: pointer;
+          transition: border-color .2s, box-shadow .2s, background-color .2s;
           position: relative;
-          width: 100%;
         }
-        .login-select-control {
-          width: 100%;
-          padding: 12px 40px 12px 12px;
-          border: 2px solid #e5e7eb; /* slate-200 */
-          border-radius: 8px;
-          font-size: 15px;
-          background-color: #fff;
-          color: #111827; /* gray-900 */
-          transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
-          appearance: none;
+        .custom-select-button:hover { border-color: #3f86be; }
+        .custom-select-button:focus-visible {
+          outline: none; border-color: #4A90C5;
+          box-shadow: 0 0 0 3px rgba(74,144,197,.20);
         }
-        .login-select-control:hover {
-          border-color: #a5b4fc; /* indigo-300 */
+        .custom-select-menu {
+          position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+          background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+          box-shadow: 0 10px 30px rgba(15,23,42,.12), 0 3px 10px rgba(15,23,42,.06);
+          overflow: hidden; z-index: 50;
         }
-        .login-select-control:focus {
-          outline: none;
-          border-color: #667eea;
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        .custom-select-option { padding: 16px; cursor: pointer; color: #111827; }
+        .custom-select-option:hover, .custom-select-option.active {
+          background: #e8f3fb; color: #1D5A8A;
         }
+        .custom-select-option.selected { font-weight: 600; }
         .select-chevron {
           position: absolute;
           right: 12px;
           top: 50%;
           transform: translateY(-50%);
           pointer-events: none;
-          color: #667eea;
-          font-size: 14px;
+          color: #98A2B3; /* neutral chevron like mock */
+          font-size: 16px;
           line-height: 1;
         }
+
+        /* Modal styles for switch confirmation */
+        .modal-overlay {
+          position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px; z-index: 100;
+        }
+        .modal-card {
+          background: #fff; border-radius: 12px; width: 100%; max-width: 520px;
+          box-shadow: 0 20px 48px rgba(0,0,0,.35);
+          border: 1px solid #e3eef6;
+        }
+        .modal-body {
+          padding: 22px 24px 12px; display: flex; gap: 12px; align-items: flex-start;
+        }
+        .modal-icon {
+          width: 32px; height: 32px; border-radius: 50%;
+          background: #FFF6ED; color: #F97316; /* orange */
+          display: inline-flex; align-items: center; justify-content: center;
+          font-weight: 700; border: 1px solid #FED7AA;
+        }
+        .modal-title { margin: 0 0 6px 0; font-size: 16px; font-weight: 700; color: #111827; }
+        .modal-text { margin: 0; font-size: 14px; color: #4B5563; line-height: 1.45; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 8px 24px 18px; }
+        .btn-outline { background: #fff; color: #111827; border: 1px solid #d1d5db; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+        .btn-outline:hover { background: #f9fafb; }
+        .btn-primary { background: #4A90C5; color: #fff; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+        .btn-primary:hover { background: #3e8bc5ff; }
 
         .login-tab {
           flex: 1;
