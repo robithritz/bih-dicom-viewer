@@ -4,10 +4,41 @@ import crypto from 'crypto';
 
 function addDuration(base, duration) {
   const d = new Date(base);
-  if (duration === '1w' || duration === '1week') {
+  const val = String(duration || '').toLowerCase();
+
+  // Support explicit day/week/month shorthands like 1d, 7d, 14d, 30d, 1w, 1m
+  const dayMatch = val.match(/^([0-9]+)d$/);
+  const weekMatch = val.match(/^([0-9]+)w$/);
+  const monthMatch = val.match(/^([0-9]+)m$/);
+
+  if (dayMatch) {
+    const days = parseInt(dayMatch[1], 10);
+    d.setDate(d.getDate() + (isNaN(days) ? 7 : days));
+    return d;
+  }
+  if (weekMatch) {
+    const weeks = parseInt(weekMatch[1], 10);
+    d.setDate(d.getDate() + (isNaN(weeks) ? 7 : weeks * 7));
+    return d;
+  }
+  if (monthMatch) {
+    const months = parseInt(monthMatch[1], 10);
+    d.setMonth(d.getMonth() + (isNaN(months) ? 1 : months));
+    return d;
+  }
+
+  if (val === '1w' || val === '1week') {
     d.setDate(d.getDate() + 7);
-  } else if (duration === '1m' || duration === '1month') {
+  } else if (val === '1m' || val === '1month') {
     d.setMonth(d.getMonth() + 1);
+  } else if (val === '1d' || val === '1day') {
+    d.setDate(d.getDate() + 1);
+  } else if (val === '7d') {
+    d.setDate(d.getDate() + 7);
+  } else if (val === '14d') {
+    d.setDate(d.getDate() + 14);
+  } else if (val === '30d' || val === '30days') {
+    d.setDate(d.getDate() + 30);
   } else {
     d.setDate(d.getDate() + 7); // default 1 week
   }

@@ -343,3 +343,42 @@
     text-wrap: balance;
   }
 }
+
+/* -----------------------------
+   DICOM list (episode/study)
+------------------------------ */
+@layer components {
+  .btn-view-teal {
+    @apply inline-flex items-center gap-1 px-3 py-2 rounded-lg text-white transition-colors duration-200;
+    background-color: #5D9CAD;
+  }
+
+  .btn-view-teal:hover {
+    background-color: #4f8d9d;
+  }
+
+  .btn-share {
+    @apply inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white transition-colors duration-200;
+  }
+
+  .btn-share:hover {
+    @apply bg-gray-50;
+  }
+
+  /* Shared info styles */
+  .shared-info {
+    @apply mt-3 pt-3 border-t border-gray-200;
+  }
+
+  .shared-title {
+    @apply flex items-center text-teal-700 text-sm font-medium mb-2;
+  }
+
+  .shared-row {
+    @apply flex items-center gap-2 text-sm;
+  }
+
+  .shared-valid {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700;
+  }
+}
