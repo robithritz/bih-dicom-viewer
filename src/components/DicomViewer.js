@@ -115,7 +115,7 @@ export default function DicomViewer({ filename, isAdmin = false, isPublic = fals
           <div className="navbar-title" title={filename}>DICOM Viewer</div>
 
           {/* // add current shown file dcm name */}
-          <span>{filename}</span>
+          <span className="hide-on-mobile">{filename}</span>
 
           {/* </div> */}
         </div>
@@ -193,6 +193,11 @@ export default function DicomViewer({ filename, isAdmin = false, isPublic = fals
           color: #e5e7eb;
           border-color: #4b5563;
         }
+          @media screen and (max-width: 767px) {
+              .hide-on-mobile {
+                  display: none !important; /* !important can override other styles if necessary */
+              }
+          }
       `}</style>
     </div>
   );

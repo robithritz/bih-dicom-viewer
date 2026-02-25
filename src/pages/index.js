@@ -882,6 +882,12 @@ export default function PatientPortal() {
         </div>
       )}
 
+      <style jsx>{`
+        .navbar-inner {
+          justify-content: space-between;
+        }
+      `}</style>
+
     </LayoutPatient >
   );
 }
