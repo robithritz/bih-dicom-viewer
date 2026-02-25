@@ -293,7 +293,7 @@ export default function PatientPortal() {
     const folder = firstFile.includes('/') ? firstFile.split('/')[0] : '';
     // Expect pattern like <something>_<EPISODEID>
     const parts = folder.split('_');
-    if (parts.length >= 2) return parts.slice(1).join('_');
+    if (parts.length >= 2) return parts[1].split('-')[0];
     return study?.episodeId || null;
   };
 
@@ -514,7 +514,7 @@ export default function PatientPortal() {
                         </div>
 
                         <div className="divide-y divide-gray-200">
-                          {arr.map(({ id, study }) => (
+                          {arr.sort((a, b) => (a.study.studyDate || '').localeCompare(b.study.studyDate)).map(({ id, study }) => (
                             <div key={id} className="study-item px-4 py-4">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="min-w-0">
