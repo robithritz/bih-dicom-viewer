@@ -1306,390 +1306,397 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   }, [updateScrollbarDrag]);
 
   return (
-    <div className="cornerstone-container" style={{
-      marginLeft: showFileBrowser ? '350px' : '0',
-      transition: 'margin-left 0.3s ease',
-      width: showFileBrowser ? 'calc(100% - 350px)' : '100%'
-    }}>
-      <Toolbar
-        currentTool={currentTool}
-        onToolChange={activateTool}
-        onClearMeasurements={clearMeasurements}
-        onRotate={rotateImage}
-        onReset={resetView}
-        onToggleFileBrowser={() => setShowFileBrowser(!showFileBrowser)}
-        currentFrame={currentFrame}
-        totalFrames={totalFrames}
-      />
+    <>
+      <div className="viewer-navbar">
+        <Toolbar
+          currentTool={currentTool}
+          onToolChange={activateTool}
+          onClearMeasurements={clearMeasurements}
+          onRotate={rotateImage}
+          onReset={resetView}
+          onToggleFileBrowser={() => setShowFileBrowser(!showFileBrowser)}
+          currentFrame={currentFrame}
+          totalFrames={totalFrames}
+        />
+      </div>
+      <div className="cornerstone-container" style={{
+        marginLeft: showFileBrowser ? '350px' : '0',
+        transition: 'margin-left 0.3s ease',
+        width: showFileBrowser ? 'calc(100% - 350px)' : '100%',
+        height: 'calc(100vh - 64px - 48px - 81px)',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#0f172a'
+      }}>
 
-      <div className="viewer-content">
-        {showFileBrowser && (
-          <FileBrowser
-            isAdmin={isAdmin}
-            isPublic={isPublic}
-            publicToken={publicToken}
-            patientId={filename.includes('/') ? filename.split('/')[0].split('_')[0] : filename} // Extract patient ID from folder name
-            currentFile={filename}
-            activeSeriesIndex={currentSeriesIndex}
-            onFileSelect={(newFilename) => {
-              try {
-                let targetSeriesIndex = -1;
-                let targetFileIndex = 0;
-                for (let i = 0; i < seriesData.length; i++) {
-                  const idx = seriesData[i]?.files?.findIndex(f => f.name === newFilename);
-                  if (idx !== -1) { targetSeriesIndex = i; targetFileIndex = idx; break; }
-                }
-                if (targetSeriesIndex === -1) {
-                  // Fallback: match by filename suffix (in case different path formatting)
+        <div className="viewer-content" style={{ position: 'relative', flex: 1 }}>
+          {showFileBrowser && (
+            <FileBrowser
+              isAdmin={isAdmin}
+              isPublic={isPublic}
+              publicToken={publicToken}
+              patientId={filename.includes('/') ? filename.split('/')[0].split('_')[0] : filename} // Extract patient ID from folder name
+              currentFile={filename}
+              activeSeriesIndex={currentSeriesIndex}
+              onFileSelect={(newFilename) => {
+                try {
+                  let targetSeriesIndex = -1;
+                  let targetFileIndex = 0;
                   for (let i = 0; i < seriesData.length; i++) {
-                    const idx = seriesData[i]?.files?.findIndex(f => f.name.endsWith('/' + newFilename));
+                    const idx = seriesData[i]?.files?.findIndex(f => f.name === newFilename);
                     if (idx !== -1) { targetSeriesIndex = i; targetFileIndex = idx; break; }
                   }
-                }
-                if (targetSeriesIndex !== -1) {
-                  navigateToFileInSeries(targetFileIndex, targetSeriesIndex);
-                } else {
-                  // Default: keep current series, go to first file
+                  if (targetSeriesIndex === -1) {
+                    // Fallback: match by filename suffix (in case different path formatting)
+                    for (let i = 0; i < seriesData.length; i++) {
+                      const idx = seriesData[i]?.files?.findIndex(f => f.name.endsWith('/' + newFilename));
+                      if (idx !== -1) { targetSeriesIndex = i; targetFileIndex = idx; break; }
+                    }
+                  }
+                  if (targetSeriesIndex !== -1) {
+                    navigateToFileInSeries(targetFileIndex, targetSeriesIndex);
+                  } else {
+                    // Default: keep current series, go to first file
+                    navigateToFileInSeries(0, currentSeriesIndex);
+                  }
+                } catch (e) {
                   navigateToFileInSeries(0, currentSeriesIndex);
                 }
-              } catch (e) {
-                navigateToFileInSeries(0, currentSeriesIndex);
-              }
-            }}
-            onClose={() => setShowFileBrowser(false)}
-          />
-        )}
+              }}
+              onClose={() => setShowFileBrowser(false)}
+            />
+          )}
 
-        <div className="dicom-viewport">
-          <div
-            ref={elementRef}
-            className="cornerstone-element"
-            onContextMenu={(e) => e.preventDefault()}
-            style={{
-              touchAction: 'none', // Prevent default touch behaviors
-              userSelect: 'none',  // Prevent text selection
-              WebkitUserSelect: 'none', // Safari
-              MozUserSelect: 'none',    // Firefox
-              msUserSelect: 'none',     // IE/Edge
-              WebkitTouchCallout: 'none', // Prevent iOS callout
-              WebkitTapHighlightColor: 'transparent' // Remove tap highlight
-            }}
-          />
+          <div className="dicom-viewport" style={{ position: 'relative', height: '100%', backgroundColor: '#000' }}>
+            <div
+              ref={elementRef}
+              className="cornerstone-element"
+              onContextMenu={(e) => e.preventDefault()}
+              style={{
+                touchAction: 'none', // Prevent default touch behaviors
+                userSelect: 'none',  // Prevent text selection
+                WebkitUserSelect: 'none', // Safari
+                MozUserSelect: 'none',    // Firefox
+                msUserSelect: 'none',     // IE/Edge
+                WebkitTouchCallout: 'none', // Prevent iOS callout
+                WebkitTapHighlightColor: 'transparent' // Remove tap highlight
+              }}
+            />
 
-          {/* Loading indicator with progress */}
-          {(isLoadingImage || !toolsReady) && (
-            <div className="loading-overlay">
-              <div className="loading-spinner"></div>
-              <div className="loading-text">
-                {isLoadingImage ? (
-                  <>
-                    Loading DICOM image... {loadingProgress > 0 && `${loadingProgress}%`}
-                    <div style={{
-                      width: '200px',
-                      height: '4px',
-                      backgroundColor: 'rgba(255,255,255,0.3)',
-                      borderRadius: '2px',
-                      marginTop: '8px',
-                      overflow: 'hidden'
-                    }}>
+            {/* Loading indicator with progress */}
+            {(isLoadingImage || !toolsReady) && (
+              <div className="loading-overlay">
+                <div className="loading-spinner"></div>
+                <div className="loading-text">
+                  {isLoadingImage ? (
+                    <>
+                      Loading DICOM image... {loadingProgress > 0 && `${loadingProgress}%`}
                       <div style={{
-                        width: `${loadingProgress}%`,
-                        height: '100%',
-                        backgroundColor: '#007bff',
+                        width: '200px',
+                        height: '4px',
+                        backgroundColor: 'rgba(255,255,255,0.3)',
                         borderRadius: '2px',
-                        transition: 'width 0.3s ease'
-                      }}></div>
-                    </div>
-                  </>
-                ) : 'Initializing tools...'}
-              </div>
-            </div>
-          )}
-
-          {totalFrames > 1 && (
-            <div className="frame-info">
-              Frame {currentFrame + 1} of {totalFrames}
-            </div>
-          )}
-
-          {/* Series background preloading progress */}
-          {seriesPreload.inProgress && seriesPreload.total > 0 && (
-            <div className="absolute left-1/2 transform -translate-x-1/2 bottom-3 z-50 px-3 py-2 bg-black bg-opacity-60 rounded">
-              <div className="flex items-center gap-2 text-white text-xs">
-                <span className="opacity-90">loading all images...</span>
-                <div className="w-40 h-1.5 bg-gray-700 rounded overflow-hidden">
-                  <div
-                    className="h-1.5 bg-purple-500"
-                    style={{ width: `${Math.round((seriesPreload.loaded / seriesPreload.total) * 100)}%` }}
-                  />
+                        marginTop: '8px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          width: `${loadingProgress}%`,
+                          height: '100%',
+                          backgroundColor: '#007bff',
+                          borderRadius: '2px',
+                          transition: 'width 0.3s ease'
+                        }}></div>
+                      </div>
+                    </>
+                  ) : 'Initializing tools...'}
                 </div>
-                <span>{Math.round((seriesPreload.loaded / seriesPreload.total) * 100)}%</span>
               </div>
-            </div>
-          )}
+            )}
+
+            {totalFrames > 1 && (
+              <div className="frame-info">
+                Frame {currentFrame + 1} of {totalFrames}
+              </div>
+            )}
+
+            {/* Series background preloading progress */}
+            {seriesPreload.inProgress && seriesPreload.total > 0 && (
+              <div className="absolute left-1/2 transform -translate-x-1/2 bottom-3 z-50 px-3 py-2 bg-black bg-opacity-60 rounded">
+                <div className="flex items-center gap-2 text-white text-xs">
+                  <span className="opacity-90">loading all images...</span>
+                  <div className="w-40 h-1.5 bg-gray-700 rounded overflow-hidden">
+                    <div
+                      className="h-1.5 bg-purple-500"
+                      style={{ width: `${Math.round((seriesPreload.loaded / seriesPreload.total) * 100)}%` }}
+                    />
+                  </div>
+                  <span>{Math.round((seriesPreload.loaded / seriesPreload.total) * 100)}%</span>
+                </div>
+              </div>
+            )}
 
 
-          {/* Series Navigation */}
-          {seriesData.length > 1 && (
-            <>
-              {/* Previous Series Button (Left Side) */}
-              <button
-                onClick={goToPreviousSeries}
-                disabled={currentSeriesIndex === 0}
-                className={`
+            {/* Series Navigation */}
+            {seriesData.length > 1 && (
+              <>
+                {/* Previous Series Button (Left Side) */}
+                <button
+                  onClick={goToPreviousSeries}
+                  disabled={currentSeriesIndex === 0}
+                  className={`
                   absolute left-16 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-50
                   ${currentSeriesIndex === 0
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'
-                  }
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'
+                    }
                   text-white text-xl font-bold
                 `}
-                title={`Previous series (${currentSeriesIndex + 1} of ${seriesData.length})`}
-              >
-                ⟨
-              </button>
+                  title={`Previous series (${currentSeriesIndex + 1} of ${seriesData.length})`}
+                >
+                  ⟨
+                </button>
 
-              {/* Next Series Button (Right Side) */}
-              <button
-                onClick={goToNextSeries}
-                disabled={currentSeriesIndex === seriesData.length - 1}
-                className={`
+                {/* Next Series Button (Right Side) */}
+                <button
+                  onClick={goToNextSeries}
+                  disabled={currentSeriesIndex === seriesData.length - 1}
+                  className={`
                   absolute right-16 top-1/2 transform -translate-y-1/2
                   w-12 h-12 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg z-40
                   ${currentSeriesIndex === seriesData.length - 1
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'
-                  }
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'
+                    }
                   text-white text-xl font-bold
                 `}
-                title={`Next series (${currentSeriesIndex + 2} of ${seriesData.length})`}
-              >
-                ⟩
-              </button>
+                  title={`Next series (${currentSeriesIndex + 2} of ${seriesData.length})`}
+                >
+                  ⟩
+                </button>
 
-              {/* Series Navigation Info */}
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg text-sm z-50">
-                <div className="text-center">
-                  <div className="font-bold">Series {currentSeriesIndex + 1} of {seriesData.length}</div>
-                  <div className="text-xs opacity-80">
-                    {seriesData[currentSeriesIndex]?.seriesDescription || 'Unknown Series'}
+                {/* Series Navigation Info */}
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg text-sm z-50">
+                  <div className="text-center">
+                    <div className="font-bold">Series {currentSeriesIndex + 1} of {seriesData.length}</div>
+                    <div className="text-xs opacity-80">
+                      {seriesData[currentSeriesIndex]?.seriesDescription || 'Unknown Series'}
+                    </div>
+                    <div className="text-xs opacity-60">
+                      File {currentSeriesFileIndex + 1} of {seriesData[currentSeriesIndex]?.files?.length || 0} in this series
+                    </div>
                   </div>
-                  <div className="text-xs opacity-60">
-                    File {currentSeriesFileIndex + 1} of {seriesData[currentSeriesIndex]?.files?.length || 0} in this series
+                </div>
+              </>
+            )}
+
+
+
+            {/* Series File Scroll Bar (for large series like 451 files) */}
+            {!isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
+              <div className="absolute left-2 top-16 bottom-16 w-6 z-40">
+                <div ref={scrollTrackRef} className="relative h-full bg-gray-800 bg-opacity-50 rounded-full">
+                  {/* Scroll track */}
+                  <div
+                    className="absolute inset-0 rounded-full cursor-pointer"
+                    onClick={(e) => {
+                      const currentSeries = seriesData[currentSeriesIndex];
+                      if (!currentSeries) return;
+
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const clickY = e.clientY - rect.top;
+                      const scrollBarHeight = rect.height;
+                      const percentage = clickY / scrollBarHeight;
+                      const filesLen = currentSeries?.files?.length || 0;
+                      if (!filesLen) return;
+                      const newFileIndex = Math.floor(percentage * filesLen);
+                      const clampedIndex = Math.max(0, Math.min(filesLen - 1, newFileIndex));
+
+                      if (clampedIndex !== currentSeriesFileIndex) {
+                        navigateToFileInSeries(clampedIndex);
+                      }
+                    }}
+                  />
+
+                  {/* Scroll thumb */}
+                  <div
+                    className="absolute w-full bg-indigo-500 rounded-full transition-all duration-100 hover:bg-indigo-400 cursor-grab active:cursor-grabbing"
+                    onMouseDown={startScrollbarMouseDrag}
+                    onTouchStart={startScrollbarTouchDrag}
+                    style={{
+                      height: `${(() => { const len = seriesData[currentSeriesIndex]?.files?.length || 1; return Math.max(20, (1 / len) * 100); })()}%`,
+                      top: `${(() => { const len = seriesData[currentSeriesIndex]?.files?.length || 1; const h = Math.max(20, (1 / len) * 100); const denom = Math.max(1, len - 1); return (currentSeriesFileIndex / denom) * (100 - h); })()}%`
+                    }}
+                  />
+
+                  {/* File count indicator */}
+                  <div className="absolute -right-16 top-0 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+                    {currentSeriesFileIndex + 1} / {(seriesData[currentSeriesIndex]?.files?.length || 0)}
                   </div>
                 </div>
               </div>
-            </>
-          )}
+            )}
+
+            {/* Mobile Series File Navigation (Up/Down arrows) */}
+            {false && isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
+              <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
+                {/* Previous file in series */}
+                <button
+                  onClick={goToPreviousFileInSeries}
+                  disabled={currentSeriesFileIndex === 0}
+                  className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === 0
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                  title="Previous file in series"
+                >
+                  F3333 
+                   0 0 0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                   0
+                </button>
+
+                {/* Next file in series */}
+                <button
+                  onClick={goToNextFileInSeries}
+                  disabled={currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)}
+                  className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                  title="Next file in series"
+                >
+                   0
+                </button>
+              </div>
+            )}
 
 
 
-          {/* Series File Scroll Bar (for large series like 451 files) */}
-          {!isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
-            <div className="absolute left-2 top-16 bottom-16 w-6 z-40">
-              <div ref={scrollTrackRef} className="relative h-full bg-gray-800 bg-opacity-50 rounded-full">
-                {/* Scroll track */}
-                <div
-                  className="absolute inset-0 rounded-full cursor-pointer"
-                  onClick={(e) => {
-                    const currentSeries = seriesData[currentSeriesIndex];
-                    if (!currentSeries) return;
+            {/* Mobile Series File Navigation (clean buttons) */}
+            {isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
+              <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
+                <button
+                  onClick={() => navigateToFileInSeries(currentSeriesFileIndex - 1)}
+                  disabled={currentSeriesFileIndex === 0}
+                  className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === 0
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                  title="Previous file in series"
+                  aria-label="Previous file in series"
+                >
+                  ↑
+                </button>
 
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const clickY = e.clientY - rect.top;
-                    const scrollBarHeight = rect.height;
-                    const percentage = clickY / scrollBarHeight;
-                    const filesLen = currentSeries?.files?.length || 0;
-                    if (!filesLen) return;
-                    const newFileIndex = Math.floor(percentage * filesLen);
-                    const clampedIndex = Math.max(0, Math.min(filesLen - 1, newFileIndex));
+                <button
+                  onClick={() => navigateToFileInSeries(currentSeriesFileIndex + 1)}
+                  disabled={currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)}
+                  className={`
+                  w-12 h-12 rounded-full flex items-center justify-center
+                  transition-all duration-200 shadow-lg
+                  ${currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
+                  text-white text-xl font-bold
+                `}
+                  title="Next file in series"
+                  aria-label="Next file in series"
+                >
+                  ↓
+                </button>
+              </div>
+            )}
 
-                    if (clampedIndex !== currentSeriesFileIndex) {
-                      navigateToFileInSeries(clampedIndex);
+            {/* Mobile Frame Navigation Buttons */}
+            {totalFrames > 1 && (
+              <div className="absolute right-16 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-50">
+                {/* Previous Frame Button */}
+                <button
+                  onClick={() => {
+                    if (currentFrame > 0) {
+                      setCurrentFrame(currentFrame - 1);
+                      loadFrameImage(currentFrame - 1);
                     }
                   }}
-                />
-
-                {/* Scroll thumb */}
-                <div
-                  className="absolute w-full bg-indigo-500 rounded-full transition-all duration-100 hover:bg-indigo-400 cursor-grab active:cursor-grabbing"
-                  onMouseDown={startScrollbarMouseDrag}
-                  onTouchStart={startScrollbarTouchDrag}
-                  style={{
-                    height: `${(() => { const len = seriesData[currentSeriesIndex]?.files?.length || 1; return Math.max(20, (1 / len) * 100); })()}%`,
-                    top: `${(() => { const len = seriesData[currentSeriesIndex]?.files?.length || 1; const h = Math.max(20, (1 / len) * 100); const denom = Math.max(1, len - 1); return (currentSeriesFileIndex / denom) * (100 - h); })()}%`
-                  }}
-                />
-
-                {/* File count indicator */}
-                <div className="absolute -right-16 top-0 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
-                  {currentSeriesFileIndex + 1} / {(seriesData[currentSeriesIndex]?.files?.length || 0)}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Mobile Series File Navigation (Up/Down arrows) */}
-          {false && isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
-              {/* Previous file in series */}
-              <button
-                onClick={goToPreviousFileInSeries}
-                disabled={currentSeriesFileIndex === 0}
-                className={`
-                  w-12 h-12 rounded-full flex items-center justify-center
-                  transition-all duration-200 shadow-lg
-                  ${currentSeriesFileIndex === 0
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
-                  text-white text-xl font-bold
-                `}
-                title="Previous file in series"
-              >
-                F3333 
-                 0 0 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-                 0
-              </button>
-
-              {/* Next file in series */}
-              <button
-                onClick={goToNextFileInSeries}
-                disabled={currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)}
-                className={`
-                  w-12 h-12 rounded-full flex items-center justify-center
-                  transition-all duration-200 shadow-lg
-                  ${currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
-                  text-white text-xl font-bold
-                `}
-                title="Next file in series"
-              >
-                 0
-              </button>
-            </div>
-          )}
-
-
-
-          {/* Mobile Series File Navigation (clean buttons) */}
-          {isMobile && seriesData.length > 0 && (seriesData[currentSeriesIndex]?.files?.length || 0) > 1 && (
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-50">
-              <button
-                onClick={() => navigateToFileInSeries(currentSeriesFileIndex - 1)}
-                disabled={currentSeriesFileIndex === 0}
-                className={`
-                  w-12 h-12 rounded-full flex items-center justify-center
-                  transition-all duration-200 shadow-lg
-                  ${currentSeriesFileIndex === 0
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
-                  text-white text-xl font-bold
-                `}
-                title="Previous file in series"
-                aria-label="Previous file in series"
-              >
-                ↑
-              </button>
-
-              <button
-                onClick={() => navigateToFileInSeries(currentSeriesFileIndex + 1)}
-                disabled={currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)}
-                className={`
-                  w-12 h-12 rounded-full flex items-center justify-center
-                  transition-all duration-200 shadow-lg
-                  ${currentSeriesFileIndex === ((seriesData[currentSeriesIndex]?.files?.length || 1) - 1)
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 cursor-pointer hover:scale-110'}
-                  text-white text-xl font-bold
-                `}
-                title="Next file in series"
-                aria-label="Next file in series"
-              >
-                ↓
-              </button>
-            </div>
-          )}
-
-          {/* Mobile Frame Navigation Buttons */}
-          {totalFrames > 1 && (
-            <div className="absolute right-16 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-50">
-              {/* Previous Frame Button */}
-              <button
-                onClick={() => {
-                  if (currentFrame > 0) {
-                    setCurrentFrame(currentFrame - 1);
-                    loadFrameImage(currentFrame - 1);
-                  }
-                }}
-                disabled={currentFrame === 0}
-                className={`
+                  disabled={currentFrame === 0}
+                  className={`
                   w-10 h-10 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg
                   ${currentFrame === 0
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 cursor-pointer'
-                  }
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 cursor-pointer'
+                    }
                   text-white text-lg font-bold
                 `}
-              >
-                ↑
-              </button>
+                >
+                  ↑
+                </button>
 
-              {/* Next Frame Button */}
-              <button
-                onClick={() => {
-                  if (currentFrame < totalFrames - 1) {
-                    setCurrentFrame(currentFrame + 1);
-                    loadFrameImage(currentFrame + 1);
-                  }
-                }}
-                disabled={currentFrame === totalFrames - 1}
-                className={`
+                {/* Next Frame Button */}
+                <button
+                  onClick={() => {
+                    if (currentFrame < totalFrames - 1) {
+                      setCurrentFrame(currentFrame + 1);
+                      loadFrameImage(currentFrame + 1);
+                    }
+                  }}
+                  disabled={currentFrame === totalFrames - 1}
+                  className={`
                   w-10 h-10 rounded-full flex items-center justify-center
                   transition-all duration-200 shadow-lg
                   ${currentFrame === totalFrames - 1
-                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                    : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 cursor-pointer'
-                  }
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 cursor-pointer'
+                    }
                   text-white text-lg font-bold
                 `}
-              >
-                ↓
-              </button>
-            </div>
-          )}
+                >
+                  ↓
+                </button>
+              </div>
+            )}
 
-          {/* Debug info for production tool debugging */}
-          {/* <div style={{
+            {/* Debug info for production tool debugging */}
+            {/* <div style={{
             position: 'absolute',
             top: '10px',
             right: '10px',
@@ -1730,10 +1737,11 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
               </div>
             )}
           </div> */}
+          </div>
         </div>
+
+
       </div>
-
-
-    </div>
+    </>
   );
 }

@@ -86,22 +86,11 @@ export default function ViewerPage() {
       </Head>
 
       <div className="viewer-page">
-        <div className="back-button">
-          {/* <Link href="/"> */}
-          <button className="btn btn-primary" onClick={() => router.replace('/')}>← Back to Gallery</button>
-          {/* </Link> */}
-        </div>
-
         <DicomViewer filename={filename} />
       </div>
 
       <style jsx global>{`
-        body {
-          margin: 0;
-          padding: 0;
-          background: #1a1a1a;
-          font-family: Arial, sans-serif;
-        }
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
 
         .viewer-page {
           height: 100vh;
@@ -109,27 +98,7 @@ export default function ViewerPage() {
           flex-direction: column;
         }
 
-        .back-button {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          z-index: 1000;
-          margin-left: 350px; /* Account for sidebar */
-        }
-
-        .back-button a {
-          background: rgba(0, 0, 0, 0.7);
-          color: white;
-          padding: 8px 16px;
-          border-radius: 4px;
-          text-decoration: none;
-          font-size: 14px;
-          transition: background 0.2s;
-        }
-
-        .back-button a:hover {
-          background: rgba(0, 0, 0, 0.9);
-        }
+        
       `}</style>
     </>
   );
