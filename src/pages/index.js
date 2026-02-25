@@ -24,6 +24,9 @@ export default function PatientPortal() {
   const [shareExpiresAt, setShareExpiresAt] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [confirmRevokeOpen, setConfirmRevokeOpen] = useState(false);
+  // Consent dialog state
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const [copiedUID, setCopiedUID] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '' });
@@ -135,6 +138,8 @@ export default function PatientPortal() {
     setShareUrl('');
     setShareExpiresAt(null);
     setShareCopied(false);
+    setConsentDialogOpen(false);
+    setConsentChecked(false);
   };
 
   const closeShareModal = () => {
@@ -146,10 +151,12 @@ export default function PatientPortal() {
     setShareUrl('');
     setShareExpiresAt(null);
     setShareCopied(false);
+    setConsentDialogOpen(false);
+    setConsentChecked(false);
   };
 
   const handleCreateShare = async (e) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
     if (!shareStudyUID) return;
     try {
       setShareLoading(true);
@@ -701,11 +708,15 @@ export default function PatientPortal() {
                 type="button"
                 onClick={() => setShareDuration(value)}
                 disabled={isActive}
-                className={`px-3 py-2 rounded-lg border text-sm ${shareDuration === value ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'} ${isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-3 py-2 rounded-lg border text-sm ${shareDuration === value ? 'bg-[#155DFC] border-[#155DFC] text-white shadow-sm' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'} ${isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {label}
               </button>
             );
+
+            // Compute preview expiry based on selected duration
+            const durationDays = parseInt(String(shareDuration).replace(/[^0-9]/g, ''), 10) || 7;
+            const previewExpiry = dayjs().add(durationDays, 'day');
 
             return (
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-5 relative">
@@ -716,18 +727,18 @@ export default function PatientPortal() {
                 {/* Create New Share Link */}
                 <div className="mt-5">
                   <div className="text-sm font-medium text-gray-900 mb-2">Create New Share Link</div>
-                  {isActive && (
-                    <div className="flex items-start gap-2 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg p-3 mb-3">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="mt-0.5">
-                        <circle cx="12" cy="12" r="9" stroke="#f59e0b" strokeWidth="1.5" />
-                        <path d="M12 8v.01M11 11h1v5h1" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
-                      </svg>
-                      <div>
-                        <div className="font-medium text-sm">Active Share Link Already Exists</div>
-                        <div className="text-sm">This study already has an active share link. Please revoke the existing link below if you want to create a new one.</div>
-                      </div>
+
+                  {/* Important Security Information */}
+                  <div className="flex items-start gap-2 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg p-3 mb-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="mt-0.5">
+                      <circle cx="12" cy="12" r="9" stroke="#155DFC" strokeWidth="1.5" />
+                      <path d="M12 8v.01M11 11h1v5h1" stroke="#155DFC" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                    <div>
+                      <div className="font-medium text-sm">Important Security Information</div>
+                      <div className="text-sm">Only share this link with trusted recipients. Anyone with the link can view this study until it expires. Do not post publicly.</div>
                     </div>
-                  )}
+                  </div>
 
                   <div className="text-sm text-gray-700 mb-2">Link Expiration</div>
                   <div className="grid grid-cols-4 gap-2">
@@ -736,22 +747,25 @@ export default function PatientPortal() {
                     <DurationBtn value="14d" label="14 days" />
                     <DurationBtn value="30d" label="30 days" />
                   </div>
+                  {/* Expiration preview */}
+                  <div className="text-xs text-gray-600 mt-2">Link will expire on {previewExpiry.format('MMMM D, YYYY [at] hh:mm A')}</div>
 
                   <button
                     type="button"
-                    onClick={handleCreateShare}
+                    onClick={() => setConsentDialogOpen(true)}
                     disabled={isActive || shareLoading || !shareStudyUID}
-                    className={`w-full mt-3 px-4 py-2 rounded-lg text-sm font-medium ${isActive ? 'bg-gray-200 text-gray-600 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                    className={`w-full mt-3 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 ${isActive ? 'bg-gray-200 text-gray-600 cursor-not-allowed' : 'bg-[#155DFC] text-white hover:bg-[#0f49d9]'}`}
                   >
-                    {isActive ? 'Link Already Generated' : (shareLoading ? 'Creating...' : 'Create Share Link')}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    Generate Share Link
                   </button>
                   {shareError && <div className="text-red-500 text-sm mt-1">{shareError}</div>}
                 </div>
 
                 {/* Active Share Links */}
-                {isActive && (
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <div className="text-sm font-medium text-gray-900 mb-2">Active Share Links</div>
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <div className="text-sm font-medium text-gray-900 mb-2">Active Share Links</div>
+                  {isActive ? (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                       <div className="text-xs text-gray-600 break-all flex items-start gap-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="mt-0.5"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -768,11 +782,74 @@ export default function PatientPortal() {
                         <button type="button" onClick={() => setConfirmRevokeOpen(true)} className="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 text-sm">Revoke</button>
                       </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-500 text-sm flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <span>No active share links yet</span>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {consentDialogOpen && (
+        <div className="fixed inset-0 bg-black/70 z-[1150] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-yellow-50 border border-yellow-200 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 9-8 9s-8-4-8-9V7l8-4Z" stroke="#D97706" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><path d="M12 9v4" stroke="#D97706" strokeWidth="1.5" strokeLinecap="round" /><circle cx="12" cy="16" r=".75" fill="#D97706" /></svg>
+              </div>
+              <div>
+                <div className="text-base font-semibold text-gray-900">Data Sharing Consent</div>
+                <div className="text-sm text-gray-600 mt-1">Please read and agree to the following before generating a share link:</div>
+              </div>
+            </div>
+
+            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+              <div className="font-medium mb-1 flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 2 22h20L12 2Z" stroke="#D97706" strokeWidth="1.5" /><path d="M12 9v4" stroke="#D97706" strokeWidth="1.5" strokeLinecap="round" /><circle cx="12" cy="17" r=".75" fill="#D97706" /></svg>
+                <span>Important Notice</span>
+              </div>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Your radiology imaging data will be shared externally via a publicly accessible link.</li>
+                <li>Anyone with the link can view your medical imaging until the expiration date.</li>
+                <li>Bali International Hospital (BIH) is no longer responsible for the security, privacy, or use of this data once shared externally.</li>
+                <li>You are solely responsible for ensuring that the link is only shared with trusted healthcare providers or individuals.</li>
+                <li>This action cannot be undone, but you can revoke the link at any time.</li>
+              </ul>
+            </div>
+
+            <label className="mt-4 flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 text-[#155DFC] border-gray-300 rounded"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+              />
+              <span>I understand and agree that my radiology data will be shared externally, and I acknowledge that Bali International Hospital (BIH) is no longer responsible for the data once shared.</span>
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setConsentDialogOpen(false); setConsentChecked(false); }}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!consentChecked || shareLoading}
+                onClick={async () => { await handleCreateShare(); setConsentDialogOpen(false); setConsentChecked(false); }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${(!consentChecked || shareLoading) ? 'bg-gray-200 text-gray-600 cursor-not-allowed' : 'bg-[#155DFC] text-white hover:bg-[#0f49d9]'}`}
+              >
+                {shareLoading ? 'Generating...' : 'I Agree & Generate Link'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
