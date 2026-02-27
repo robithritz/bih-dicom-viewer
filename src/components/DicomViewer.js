@@ -74,7 +74,7 @@ export default function DicomViewer({ filename, isAdmin = false, isPublic = fals
       const data = await response.json();
 
       // extract episodeId from uploadedFolderName
-      const epsId = filename?.split('_')[1].split('-')[0];
+      const epsId = filename?.split('_')[1].split('/')[0].split('-')[0];
       setMetadata({ ...data, episodeId: epsId });
 
     } catch (err) {

@@ -488,9 +488,8 @@ export default function LoginPage() {
               <input
                 type="text"
                 id="idLast4"
-                inputMode="numeric"
                 value={idLast4}
-                onChange={(e) => setIdLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onChange={(e) => setIdLast4(e.target.value)}
                 maxLength="4"
                 required
                 disabled={loading}
