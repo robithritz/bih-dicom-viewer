@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getBaseUrl } from '../utils/baseUrl';
 
 export default function FileBrowser({ currentFile, onFileSelect, onClose, patientId, isAdmin, isPublic = false, publicToken = null, activeSeriesIndex = null }) {
   const [series, setSeries] = useState([]);
@@ -20,7 +21,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
 
     try {
       setLoading(true);
-      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const base = getBaseUrl();
       // Use the study-based API scoped to the current file
       const apiPath = isAdmin
         ? `${base}/api/admin/study-files/${encodeURIComponent(currentFile)}`

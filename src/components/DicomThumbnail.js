@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { getBaseUrl } from '../utils/baseUrl';
 
 const DicomThumbnail = ({ filename, size = 150, className = '', isAdmin = false }) => {
   const canvasRef = useRef(null);
@@ -18,9 +19,10 @@ const DicomThumbnail = ({ filename, size = 150, className = '', isAdmin = false 
       setError(null);
 
       // Use appropriate API endpoint based on admin/patient context
+      const base = getBaseUrl();
       const apiPath = isAdmin
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/admin/dicom-thumbnail/${encodeURIComponent(filename)}`
-        : `${process.env.NEXT_PUBLIC_APP_URL}/api/dicom-thumbnail/${encodeURIComponent(filename)}`;
+        ? `${base}/api/admin/dicom-thumbnail/${encodeURIComponent(filename)}`
+        : `${base}/api/dicom-thumbnail/${encodeURIComponent(filename)}`;
 
       // Get authentication token
       const token = isAdmin

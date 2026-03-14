@@ -6,6 +6,7 @@ import LayoutPatient from '../components/LayoutPatient';
 import { useAuth } from '../contexts/AuthContext';
 import Image from 'next/image';
 import dayjs from 'dayjs';
+import { getBaseUrl } from '../utils/baseUrl';
 
 export default function PatientPortal() {
   const router = useRouter();
@@ -60,7 +61,7 @@ export default function PatientPortal() {
           qs.append(key, String(val).trim());
         }
       });
-      const baseUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/studies`;
+      const baseUrl = `${getBaseUrl()}/api/studies`;
       const url = qs.toString() ? `${baseUrl}?${qs.toString()}` : baseUrl;
       const response = await fetch(url,
         {
@@ -161,7 +162,7 @@ export default function PatientPortal() {
     try {
       setShareLoading(true);
       setShareError('');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/studies/share`, {
+      const res = await fetch(`${getBaseUrl()}/api/studies/share`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -201,7 +202,7 @@ export default function PatientPortal() {
   const handleCopyPublicLink = async (study) => {
     const token = study?.publicToken;
     if (!token) return;
-    const base = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const base = getBaseUrl() || (typeof window !== 'undefined' ? window.location.origin : '');
     const url = `${base}/public/viewer/${encodeURIComponent(token)}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -214,7 +215,7 @@ export default function PatientPortal() {
 
   const handleRevokeShare = async (studyInstanceUID) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/studies/revoke`, {
+      const res = await fetch(`${getBaseUrl()}/api/studies/revoke`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -642,7 +643,7 @@ export default function PatientPortal() {
                                                   onClick={async (e) => {
                                                     e.preventDefault();
                                                     try {
-                                                      const base = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_APP_URL || window.location.origin) : '';
+                                                      const base = typeof window !== 'undefined' ? (getBaseUrl() || window.location.origin) : '';
                                                       const url = `${base}${href.startsWith('/') ? '' : '/'}${href}`;
                                                       await navigator.clipboard.writeText(url);
                                                       showToast('Link copied to clipboard');
@@ -700,7 +701,7 @@ export default function PatientPortal() {
             const expiresAt = study?.publicExpiresAt ? parseDate(study.publicExpiresAt) : null;
             const daysLeft = expiresAt ? Math.max(0, Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24))) : null;
             const token = study?.publicToken;
-            const base = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_APP_URL || window.location.origin) : '';
+            const base = typeof window !== 'undefined' ? (getBaseUrl() || window.location.origin) : '';
             const modalShareUrl = token ? `${base}/public/viewer/${encodeURIComponent(token)}` : '';
 
             const DurationBtn = ({ value, label }) => (

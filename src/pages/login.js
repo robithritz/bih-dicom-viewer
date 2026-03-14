@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '../contexts/AuthContext';
 import Image from 'next/image';
+import { getBaseUrl } from '../utils/baseUrl';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -157,7 +158,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/login', {
+      const response = await fetch(getBaseUrl() + '/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,7 +194,7 @@ export default function LoginPage() {
     console.log('Submitting OTP verification:', { email, otp: otp ? '***' : undefined, sessionId });
 
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/verify-otp', {
+      const response = await fetch(getBaseUrl() + '/api/auth/verify-otp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -238,7 +239,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/login', {
+      const response = await fetch(getBaseUrl() + '/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -298,7 +299,7 @@ export default function LoginPage() {
         return;
       }
 
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/auth/login-urn', {
+      const response = await fetch(getBaseUrl() + '/api/auth/login-urn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ combined }),

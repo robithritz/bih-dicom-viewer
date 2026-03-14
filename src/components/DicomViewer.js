@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
+import { getBaseUrl } from '../utils/baseUrl';
 
 // Dynamically import cornerstone to avoid SSR issues
 const CornerstoneViewer = dynamic(() => import('./CornerstoneViewer'), {
@@ -43,7 +44,7 @@ export default function DicomViewer({ filename, isAdmin = false, isPublic = fals
   const fetchMetadata = async () => {
     try {
       setLoading(true);
-      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const base = getBaseUrl();
       const apiPath = isAdmin
         ? `${base}/api/admin/dicom-info/${encodeURIComponent(filename)}`
         : isPublic && publicToken

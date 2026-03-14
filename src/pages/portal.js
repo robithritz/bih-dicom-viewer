@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Layout from '../components/Layout';
 import Image from 'next/image';
 import { useAuth } from '../contexts/AuthContext';
+import { getBaseUrl } from '../utils/baseUrl';
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function AdminPortal() {
     setError(null);
 
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/auth/login', {
+      const response = await fetch(getBaseUrl() + '/api/admin/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +140,7 @@ export default function AdminPortal() {
       });
 
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/studies?${params}`, {
+      const response = await fetch(`${getBaseUrl()}/api/admin/studies?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
