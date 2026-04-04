@@ -7,7 +7,7 @@ export const ZIP_CHUNK_CONFIG = {
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000, // 1 second
   CHUNK_DELAY: 1000, // 1s delay between chunks to avoid WAF
-  WAF_SAFE_MODE: true, // Enable WAF-friendly upload mode
+  WAF_SAFE_MODE: false, // Enable WAF-friendly upload mode
   MAX_SINGLE_UPLOAD_SIZE: 25 * 1024 * 1024, // 50MB - use single upload for files smaller than this
 };
 

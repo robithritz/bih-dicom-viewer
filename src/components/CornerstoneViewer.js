@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Toolbar from './Toolbar';
 import FileBrowser from './FileBrowser';
+import { getBaseUrl } from '../utils/baseUrl';
 
 export default function CornerstoneViewer({ filename, metadata, isAdmin = false, isPublic = false, publicToken = null, onFileBrowserToggle }) {
   const elementRef = useRef(null);
@@ -298,7 +299,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       setToolsReady(false);
       setLoadingProgress(10);
 
-      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const base = getBaseUrl();
       const apiPath = isAdmin
         ? `${base}/api/admin/dicom-file/${encodeURIComponent(filename)}`
         : (isPublic && publicToken)
@@ -701,7 +702,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
   // Load study files for navigation
   const loadStudyFiles = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const base = getBaseUrl();
       const apiPath = isAdmin
         ? `${base}/api/admin/study-files/${encodeURIComponent(filename)}`
         : (isPublic && publicToken)
@@ -798,8 +799,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       if (currentSeries && currentSeriesFileIndex > 0) {
         const previousFile = currentSeries.files[currentSeriesFileIndex - 1];
         const viewerPath = isAdmin
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(previousFile.name)}`
-          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(previousFile.name)}`;
+          ? `${getBaseUrl()}/admin/viewer/${encodeURIComponent(previousFile.name)}`
+          : `${getBaseUrl()}/viewer/${encodeURIComponent(previousFile.name)}`;
         window.location.href = viewerPath;
       }
     }
@@ -812,8 +813,8 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
       if (currentSeries && currentSeriesFileIndex < currentSeries.files.length - 1) {
         const nextFile = currentSeries.files[currentSeriesFileIndex + 1];
         const viewerPath = isAdmin
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/admin/viewer/${encodeURIComponent(nextFile.name)}`
-          : `${process.env.NEXT_PUBLIC_APP_URL}/viewer/${encodeURIComponent(nextFile.name)}`;
+          ? `${getBaseUrl()}/admin/viewer/${encodeURIComponent(nextFile.name)}`
+          : `${getBaseUrl()}/viewer/${encodeURIComponent(nextFile.name)}`;
         window.location.href = viewerPath;
       }
     }
@@ -851,7 +852,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
           } else {
             // Load directly without metadata call; cornerstone caches the image
-            const base = process.env.NEXT_PUBLIC_APP_URL;
+            const base = getBaseUrl();
             const imageApiPath = isAdmin
               ? `${base}/api/admin/dicom-file/${encodeURIComponent(targetFile.name)}`
               : (isPublic && publicToken)
@@ -976,7 +977,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
 
     try {
       // Load image directly (no separate metadata call)
-      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const base = getBaseUrl();
       const imageApiPath = isAdmin
         ? `${base}/api/admin/dicom-file/${encodeURIComponent(file.name)}`
         : (isPublic && publicToken)
@@ -1032,7 +1033,7 @@ export default function CornerstoneViewer({ filename, metadata, isAdmin = false,
     try {
       const currentSeries = seriesData[currentSeriesIndex];
       const currentFileName = currentSeries?.files?.[currentSeriesFileIndex]?.name || filename;
-      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const base = getBaseUrl();
       const apiPath = isAdmin
         ? `${base}/api/admin/dicom-file/${encodeURIComponent(currentFileName)}`
         : (isPublic && publicToken)
