@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import prisma from '../../../../../lib/prisma';
-import { DICOM_DIR, DICOM2_DIR } from '../../../../../lib/dicom';
+import { DICOM_DIR, DICOM2_DIR, DICOM3_DIR } from '../../../../../lib/dicom';
 
 export default async function handler(req, res) {
   const { token, filename } = req.query;
@@ -39,9 +39,14 @@ export default async function handler(req, res) {
     if (!fs.existsSync(filePath)) {
       const altPath = path.join(DICOM2_DIR, filename);
       if (!fs.existsSync(altPath)) {
-        return res.status(404).json({ error: 'File not found' });
+        const tertiaryPath = path.join(DICOM3_DIR, filename);
+        if (!fs.existsSync(tertiaryPath)) {
+          return res.status(404).json({ error: 'File not found' });
+        }
+        filePath = tertiaryPath;
+      } else {
+        filePath = altPath;
       }
-      filePath = altPath;
     }
 
     res.setHeader('Content-Type', 'application/dicom');

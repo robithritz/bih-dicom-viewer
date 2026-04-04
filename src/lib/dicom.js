@@ -4,6 +4,7 @@ import dicomParser from 'dicom-parser';
 
 export const DICOM_DIR = path.join(process.cwd(), 'DICOM');
 export const DICOM2_DIR = path.join(process.cwd(), 'DICOM2');
+export const DICOM3_DIR = path.join(process.cwd(), 'DICOM3');
 
 export function getDicomFiles(folderName = null) {
   try {
@@ -44,11 +45,12 @@ export function getDicomFiles(folderName = null) {
       }
     };
 
-    // Prefer DICOM_DIR; if empty, fall back to DICOM2_DIR
+    // Prefer DICOM_DIR; if empty, fall back to DICOM2_DIR, then DICOM3_DIR
     const primary = readFromBase(DICOM_DIR);
     if (primary && primary.length > 0) return primary;
     const secondary = readFromBase(DICOM2_DIR);
-    return secondary;
+    if (secondary && secondary.length > 0) return secondary;
+    return readFromBase(DICOM3_DIR);
   } catch (error) {
     console.error('Error reading DICOM directory:', error);
     return [];
@@ -84,7 +86,9 @@ export function getDicomFilesByPatientId(patientId) {
 
     const primary = scanBase(DICOM_DIR);
     if (primary.length > 0) return primary;
-    return scanBase(DICOM2_DIR);
+    const secondary = scanBase(DICOM2_DIR);
+    if (secondary.length > 0) return secondary;
+    return scanBase(DICOM3_DIR);
   } catch (error) {
     console.error('Error reading DICOM files by patient ID:', error);
     return [];
@@ -99,9 +103,15 @@ export function parseDicomFile(filename) {
       // Fallback to secondary directory
       const altPath = path.join(DICOM2_DIR, filename);
       if (!fs.existsSync(altPath)) {
-        throw new Error('File not found');
+        // Fallback to tertiary directory
+        const tertiaryPath = path.join(DICOM3_DIR, filename);
+        if (!fs.existsSync(tertiaryPath)) {
+          throw new Error('File not found');
+        }
+        filePath = tertiaryPath;
+      } else {
+        filePath = altPath;
       }
-      filePath = altPath;
     }
 
     const dicomFileAsBuffer = fs.readFileSync(filePath);
