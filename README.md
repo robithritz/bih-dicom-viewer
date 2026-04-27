@@ -34,14 +34,64 @@ A comprehensive Node.js Express application for viewing and analyzing DICOM medi
    npm install
    ```
 
+## DICOM Storage Structure
+
+This application uses a **multi-tier fallback system** for DICOM file storage with three directories:
+
+### Directory Paths
+
+| Directory | Path | Purpose |
+|-----------|------|---------|
+| **DICOM** | `./DICOM/` | Primary storage - first choice for file storage and retrieval |
+| **DICOM2** | `./DICOM2/` | Secondary fallback - used when file not found in DICOM |
+| **DICOM3** | `./DICOM3/` | Tertiary fallback - final fallback when file not found in DICOM or DICOM2 |
+
+### How It Works
+
+1. **Primary Storage (DICOM)**: When files are uploaded, they are stored in the `DICOM` directory, organized in subfolders named after patient identifiers (e.g., `DICOM/000012_0001/`)
+
+2. **Fallback Mechanism**: When retrieving files, the system checks directories in this order:
+   - First tries `DICOM/` directory
+   - If file not found, tries `DICOM2/` directory
+   - If file not found, tries `DICOM3/` directory
+   - Returns 404 if file not found in any directory
+
+3. **Migration Support**: This structure allows gradual migration from older storage locations to new ones.
+
+### Directory Structure Example
+
+```
+bih-dicom-viewer/
+├── DICOM/                    # Primary DICOM storage
+│   ├── 000012_0001/          # Patient folder (URN_episodeId)
+│   │   ├── image1.dcm
+│   │   └── image2.dcm
+│   └── 000013_0002/
+│       └── image1.dcm
+├── DICOM2/                   # Secondary/fallback storage
+│   └── ...
+├── DICOM3/                   # Tertiary/fallback storage
+│   └── ...
+```
+
+### File Path Resolution
+
+The application constructs file paths based on patient ID and filename. For example:
+- Patient ID: `000012_0001`, Filename: `image1.dcm`
+- Resulting paths (checked in order):
+  1. `./DICOM/000012_0001/image1.dcm`
+  2. `./DICOM2/000012_0001/image1.dcm`
+  3. `./DICOM3/000012_0001/image1.dcm`
+
 ## Usage
 
-1. Place your DICOM files (.dcm) in the `DICOM` directory
-2. Start the server:
+1. **Admin Upload**: Log in to admin portal and upload ZIP files containing DICOM files
+2. **File Organization**: Files are automatically organized by patient ID into the `DICOM` directory
+3. **Start the server**:
    ```bash
    npm start
    ```
-3. Open your browser and navigate to `http://localhost:3000`
+4. **Access**: Open your browser and navigate to `http://localhost:3000`
 
 ## API Endpoints
 
