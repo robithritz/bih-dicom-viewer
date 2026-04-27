@@ -6,6 +6,7 @@ import '../styles/file-browser.css';
 import '../styles/viewer.css';
 import '../styles/cornerstone.css';
 import '../styles/folder-upload.css';
+import 'react-datepicker/dist/react-datepicker.css';
 
 export default function App({ Component, pageProps }) {
   return (

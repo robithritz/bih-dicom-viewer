@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { getBaseUrl } from '../utils/baseUrl';
 
 export default function FileBrowser({ currentFile, onFileSelect, onClose, patientId, isAdmin, isPublic = false, publicToken = null, activeSeriesIndex = null }) {
   const [series, setSeries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [studyInfo, setStudyInfo] = useState(null);
+  const [activeTab, setActiveTab] = useState('images');
 
   useEffect(() => {
     fetchFiles();
@@ -19,7 +21,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
 
     try {
       setLoading(true);
-      const base = process.env.NEXT_PUBLIC_APP_URL;
+      const base = getBaseUrl();
       // Use the study-based API scoped to the current file
       const apiPath = isAdmin
         ? `${base}/api/admin/study-files/${encodeURIComponent(currentFile)}`
@@ -62,15 +64,19 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
   return (
     <div className="file-browser">
       <div className="file-browser-header">
-        <h3>📊 Study Series</h3>
-        {studyInfo && (
-          <div className="study-info">
-            <small>{studyInfo.totalSeries} series • {studyInfo.totalFiles} total files</small>
+        <h3>Study Series</h3>
+        <div className="header-right">
+          {/* {studyInfo && (
+            <div className="study-info">
+              <small>{studyInfo.totalSeries} series • {studyInfo.totalFiles} files</small>
+            </div>
+          )} */}
+          <div className="toggle-group" role="tablist" aria-label="Images or Files Info">
+            <span>Images</span>
+            <span className="ml-2">Files Info</span>
           </div>
-        )}
-        <button className="close-btn" onClick={onClose} title="Close series browser">
-          ✕
-        </button>
+        </div>
+        <button className="close-btn" onClick={onClose} title="Close series browser">✕</button>
       </div>
 
       <div className="file-list">
@@ -115,9 +121,6 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
                   {seriesItem.seriesDescription || `Series ${seriesItem.seriesNumber}`}
                 </div>
               </div>
-              {isActive && (
-                <div className="current-indicator">👁️</div>
-              )}
             </div>
           );
         })}
@@ -126,12 +129,12 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
       <style jsx>{`
         .file-browser {
           position: fixed;
-          top: 0;
+          top: 174px;
           left: 0;
           width: 350px;
-          height: 100vh;
-          background: #1a1a1a;
-          border-right: 1px solid #333;
+          height: calc(100vh - 64px - 48px - 81px);
+          background: #0f172a;
+          border-right: 1px solid #1f2937;
           z-index: 1000;
           display: flex;
           flex-direction: column;
@@ -139,22 +142,30 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
         }
 
         .file-browser-header {
-          padding: 16px;
-          border-bottom: 1px solid #333;
+          padding: 12px 16px;
+          border-bottom: 1px solid #1f2937;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          background-color: #2a2a2a;
+          background-color: #0b1220;
         }
 
         .file-browser-header h3 {
           margin: 0;
-          font-size: 16px;
-          color: #ffffff;
+          font-size: 14px;
+          font-weight: bold;
+          color: ##FFFFFF;
+          letter-spacing: 0.02em;
+        }
+
+        .header-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
         }
 
         .study-info {
-          color: #aaa;
+          color: #9ca3af;
           font-size: 12px;
         }
 
@@ -165,12 +176,32 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
           cursor: pointer;
           padding: 4px 8px;
           border-radius: 4px;
-          color: #aaa;
+          color: #9ca3af;
         }
 
         .close-btn:hover {
-          background-color: #444;
-          color: #fff;
+          background-color: #111827;
+          color: #e5e7eb;
+        }
+
+        .toggle-group {
+          display: inline-flex;
+          overflow: hidden;
+          color: #99A1AF;
+        }
+
+        .toggle-btn {
+          font-size: 11px;
+          color: #9ca3af;
+          padding: 6px 10px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+        }
+
+        .toggle-btn.active {
+          color: #e5e7eb;
+          background-color: #111827;
         }
 
         .file-list {
@@ -182,7 +213,7 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
         .loading, .error {
           text-align: center;
           padding: 20px;
-          color: #aaa;
+          color: #9ca3af;
         }
 
         .error button {
@@ -199,23 +230,30 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
           display: flex;
           align-items: center;
           padding: 16px;
-          border-bottom: 1px solid #333;
+          border-bottom: 1px solid #1f2937;
           cursor: pointer;
-          transition: background-color 0.2s;
+          transition: background-color 0.2s, color 0.2s;
+          background-color: #0f172a;
         }
 
         .series-item:hover {
-          background-color: #333;
+          .series-info {
+            background-color: #161e2bff;
+          }
         }
 
         .series-item.active {
-          background-color: #2a4a6b;
-          border-left: 4px solid #64b5f6;
+          border-left: none;
+          .series-info {
+            background-color: #155DFC;
+          }
         }
 
         .series-info {
           flex: 1;
           min-width: 0;
+          border-radius: 8px;
+          background-color: #1E2939;
         }
 
         .series-header {
@@ -226,38 +264,32 @@ export default function FileBrowser({ currentFile, onFileSelect, onClose, patien
         }
 
         .series-number {
-          font-weight: 700;
-          color: #64b5f6;
-          font-size: 16px;
+          font-weight: 500;
+          color: #8EC5FF;
+          font-size: 15px;
         }
 
         .series-file-count {
           font-size: 12px;
-          color: #aaa;
-          background-color: #444;
+          color: #D1D5DC;
+          background-color: #364153;
           padding: 4px 8px;
-          border-radius: 12px;
+          border-radius: 8px;
+          width: 80px;
           font-weight: 500;
         }
 
         .series-description {
-          font-size: 14px;
-          color: #ddd;
+          font-size: 12px;
+          color: #99A1AF;
           word-break: break-word;
           line-height: 1.4;
           font-weight: 500;
         }
 
-        .current-indicator {
-          font-size: 18px;
-          margin-left: 8px;
-          flex-shrink: 0;
-          color: #64b5f6;
-        }
-
         .empty {
           text-align: center;
-          color: #aaa;
+          color: #9ca3af;
           padding: 40px 20px;
           font-style: italic;
         }

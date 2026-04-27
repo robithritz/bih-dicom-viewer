@@ -54,19 +54,36 @@ export async function getDicomStudiesForPatient(patientId, options = {}) {
     }
 
     // Add date range filtering if provided
+    // Note: studyDate is stored in DB as 'YYYYMMDD' (no dashes). Convert incoming 'YYYY-MM-DD' to 'YYYYMMDD'.
     if (options.dateFrom || options.dateTo) {
+      const toDbYMD = (val) => {
+        if (!val) return null;
+        const digits = String(val).replace(/[^0-9]/g, ''); // strip non-digits
+        return digits.length >= 8 ? digits.slice(0, 8) : digits; // keep YYYYMMDD
+      };
+      const fromYMD = toDbYMD(options.dateFrom);
+      const toYMD = toDbYMD(options.dateTo);
       whereConditions.studyDate = {};
-      if (options.dateFrom) {
-        whereConditions.studyDate.gte = options.dateFrom;
+      if (fromYMD) {
+        whereConditions.studyDate.gte = fromYMD;
       }
-      if (options.dateTo) {
-        whereConditions.studyDate.lte = options.dateTo;
+      if (toYMD) {
+        whereConditions.studyDate.lte = toYMD;
       }
+
+
     }
 
     // Add modality filtering if provided
     if (options.modality) {
       whereConditions.modality = options.modality;
+    }
+
+    // Add episode type filtering if provided
+    if (options.episodeType) {
+      whereConditions.uploadedFolderName = {
+        contains: options.episodeType
+      };
     }
 
     // Query DicomStudy model for active studies belonging to the patient(s)

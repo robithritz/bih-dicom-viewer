@@ -1,4 +1,5 @@
 // Web Crypto API is available in browsers
+import { getBaseUrl } from '../utils/baseUrl';
 
 /**
  * Configuration for chunked uploads
@@ -87,7 +88,7 @@ async function uploadChunk(chunkData, patientId, filename, fileHash, totalChunks
       formData.append('totalSize', totalSize.toString());
       formData.append('chunk', chunk);
 
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/upload-chunk', {
+      const response = await fetch(getBaseUrl() + '/api/upload-chunk', {
         method: 'POST',
         body: formData,
       });

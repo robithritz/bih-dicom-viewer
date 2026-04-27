@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
+import { getBaseUrl } from '../../utils/baseUrl';
 
 export default function UploadHistoryPage() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function UploadHistoryPage() {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/upload-history`, {
+      const response = await fetch(`${getBaseUrl()}/api/admin/upload-history`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -82,7 +83,7 @@ export default function UploadHistoryPage() {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/delete-upload-folder`, {
+      const response = await fetch(`${getBaseUrl()}/api/admin/delete-upload-folder`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -1,3 +1,4 @@
+import { getBaseUrl } from '../utils/baseUrl';
 /**
  * Configuration for ZIP chunked uploads
  */
@@ -6,7 +7,7 @@ export const ZIP_CHUNK_CONFIG = {
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000, // 1 second
   CHUNK_DELAY: 1000, // 1s delay between chunks to avoid WAF
-  WAF_SAFE_MODE: true, // Enable WAF-friendly upload mode
+  WAF_SAFE_MODE: false, // Enable WAF-friendly upload mode
   MAX_SINGLE_UPLOAD_SIZE: 25 * 1024 * 1024, // 50MB - use single upload for files smaller than this
 };
 
@@ -92,7 +93,7 @@ async function uploadChunk(chunkData, sessionId, folderName, filename, fileHash,
   let lastError;
   for (let attempt = 0; attempt < ZIP_CHUNK_CONFIG.MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/upload-zip-chunk', {
+      const response = await fetch(getBaseUrl() + '/api/admin/upload-zip-chunk', {
         method: 'POST',
         headers,
         body: formData
@@ -187,7 +188,7 @@ async function uploadZipFileSingle(zipFile, folderName, progressCallback) {
 
     progressCallback({ type: 'chunk', stage: 'Uploading file...', percentage: 30 });
 
-    const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/upload-zip-single', {
+    const response = await fetch(getBaseUrl() + '/api/admin/upload-zip-single', {
       method: 'POST',
       headers,
       body: formData
@@ -237,7 +238,7 @@ async function uploadZipFileSingleBase64(zipFile, folderName, progressCallback) 
 
     progressCallback({ type: 'chunk', stage: 'Uploading (base64)...', percentage: 40 });
 
-    const response = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/upload-zip-base64', {
+    const response = await fetch(getBaseUrl() + '/api/admin/upload-zip-base64', {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -332,7 +333,7 @@ export async function uploadZipFileChunked(zipFile, folderName, progressCallback
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const finalizeResponse = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/admin/finalize-zip-upload', {
+    const finalizeResponse = await fetch(getBaseUrl() + '/api/admin/finalize-zip-upload', {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -357,7 +358,7 @@ export async function uploadZipFileChunked(zipFile, folderName, progressCallback
     }
 
     // Get final result
-    const statusResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/zip-upload-status?sessionId=${sessionId}`, {
+    const statusResponse = await fetch(`${getBaseUrl()}/api/admin/zip-upload-status?sessionId=${sessionId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
@@ -385,7 +386,7 @@ async function pollExtractionProgress(sessionId, progressCallback) {
 
   while (true) {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/admin/zip-upload-status?sessionId=${sessionId}`, {
+      const response = await fetch(`${getBaseUrl()}/api/admin/zip-upload-status?sessionId=${sessionId}`, {
         headers
       });
 

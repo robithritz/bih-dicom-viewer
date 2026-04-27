@@ -1,34 +1,83 @@
-import { getDicomFilesByPatientId, parseDicomFile } from '../../../lib/dicom';
+import { getDicomFiles, getDicomFilesByPatientId, parseDicomFile } from '../../../lib/dicom';
 import { requireAuth, validatePatientFileAccess } from '../../../lib/auth-middleware';
 
 async function handler(req, res) {
   const { filename } = req.query;
 
   if (req.method !== 'GET') {
+    console.warn('[patient study-files] 405 Method not allowed', { method: req.method });
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    const start = Date.now();
+    const authPresent = !!req.headers?.authorization;
+    console.log('[patient study-files] request start', {
+      method: req.method,
+      rawFilename: filename,
+      authPresent
+    });
+
+    // Decode in case client passed an encoded slash (%2F)
+    const decodedFilename = Array.isArray(filename)
+      ? decodeURIComponent(filename[0])
+      : decodeURIComponent(filename || '');
+    console.log('[patient study-files] decoded filename', { decodedFilename });
+
     // Validate patient access to the requested file
-    const validation = validatePatientFileAccess(req, filename);
+    const validation = validatePatientFileAccess(req, decodedFilename);
+    console.log('[patient study-files] validation result', {
+      isValid: validation?.isValid,
+      patientId: validation?.patientId,
+      folderName: validation?.folderName,
+      patientFilePath: validation?.patientFilePath,
+      sessionUrn: req.patient?.urn,
+      multiUrnCount: Array.isArray(req.patient?.multiUrn) ? req.patient.multiUrn.length : 0,
+      loginBy: req.patient?.loginBy
+    });
 
     if (!validation.isValid) {
+      console.warn('[patient study-files] access validation failed', { error: validation.error });
       return res.status(403).json({ error: validation.error });
     }
 
     // Parse the current file to get its study ID
     const currentFileDataSet = parseDicomFile(validation.patientFilePath);
     const currentStudyUID = currentFileDataSet.string('x0020000d'); // Study Instance UID
+    console.log('[patient study-files] current file parsed', {
+      filePath: validation.patientFilePath,
+      currentStudyUID
+    });
 
     if (!currentStudyUID) {
+      console.warn('[patient study-files] no StudyInstanceUID extracted from current file');
       return res.status(400).json({ error: 'Could not determine study ID from current file' });
     }
 
-    // Get all files for this patient
-    const patientFiles = getDicomFilesByPatientId(validation.patientId);
+    // Get all files for this patient (and also from the specific folder as a safety net)
+    const byPatientFiles = getDicomFilesByPatientId(validation.patientId) || [];
+    let patientFiles = byPatientFiles;
+    let folderFilesCount = 0;
+    if (validation.folderName) {
+      try {
+        const folderFiles = getDicomFiles(validation.folderName) || [];
+        folderFilesCount = folderFiles.length;
+        const merged = new Set([...(patientFiles || []), ...folderFiles]);
+        patientFiles = Array.from(merged);
+      } catch (_) { /* noop */ }
+    }
+    console.log('[patient study-files] file discovery', {
+      byPatientCount: byPatientFiles.length,
+      byFolderCount: folderFilesCount,
+      mergedCount: patientFiles.length,
+      folderName: validation.folderName
+    });
 
     // Filter files to only include those from the same study
     const studyFiles = [];
+    let initialParseErrors = 0;
+    let nonImageSkipped = 0;
+    let matchedStudyCount = 0;
 
     for (const file of patientFiles) {
       try {
@@ -41,6 +90,7 @@ async function handler(req, res) {
           const rows = fileDataSet.uint16('x00280010') || 0;
           const columns = fileDataSet.uint16('x00280011') || 0;
           if (!hasPixel || rows === 0 || columns === 0) {
+            nonImageSkipped++;
             continue;
           }
 
@@ -54,12 +104,20 @@ async function handler(req, res) {
             seriesNumber: seriesNumber,
             instanceNumber: instanceNumber
           });
+          matchedStudyCount++;
         }
       } catch (parseError) {
+        initialParseErrors++;
         console.warn(`Could not parse file ${file}:`, parseError.message);
         // Skip files that can't be parsed
       }
     }
+    console.log('[patient study-files] filter summary', {
+      matchedStudyCount,
+      nonImageSkipped,
+      initialParseErrors,
+      studyFilesCount: studyFiles.length
+    });
 
     // Sort files by series number, then by instance number
     studyFiles.sort((a, b) => {
@@ -175,16 +233,32 @@ async function handler(req, res) {
     });
 
     const seriesByUIDArray = Object.values(seriesByUID).sort((a, b) => a.seriesNumber - b.seriesNumber);
+    console.log('[patient study-files] grouping summary', {
+      seriesByNumberCount: Object.values(seriesByNumber).length,
+      seriesByUIDCount: seriesByUIDArray.length,
+      filesWithoutSeries,
+      parseErrors
+    });
 
     // Use the method that finds more series
-    const seriesArray = seriesByUIDArray.length > Object.values(seriesByNumber).length
+    const useUID = seriesByUIDArray.length > Object.values(seriesByNumber).length;
+    const seriesArray = useUID
       ? seriesByUIDArray
       : Object.values(seriesByNumber).sort((a, b) => a.seriesNumber - b.seriesNumber);
+    console.log('[patient study-files] chosen series method', {
+      method: useUID ? 'byUID' : 'byNumber',
+      totalSeries: seriesArray.length
+    });
 
     // Find current series
     const currentFile = studyFiles.find(f => f.name === validation.patientFilePath);
     const currentSeriesNumber = currentFile?.seriesNumber || 1;
     const currentSeriesIndex = seriesArray.findIndex(s => s.seriesNumber === currentSeriesNumber);
+    console.log('[patient study-files] current positioning', {
+      currentFile: validation.patientFilePath,
+      currentSeriesNumber,
+      currentSeriesIndex: Math.max(0, currentSeriesIndex)
+    });
 
     res.status(200).json({
       files: studyFiles,
@@ -195,8 +269,13 @@ async function handler(req, res) {
       totalFiles: studyFiles.length,
       totalSeries: seriesArray.length
     });
+    console.log('[patient study-files] response sent', {
+      totalFiles: studyFiles.length,
+      totalSeries: seriesArray.length,
+      durationMs: Date.now() - start
+    });
   } catch (error) {
-    console.error('Error getting study files:', error);
+    console.error('[patient study-files] Error getting study files:', error);
     res.status(500).json({ error: 'Error loading study files' });
   }
 }

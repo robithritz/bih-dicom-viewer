@@ -17,7 +17,7 @@ async function handler(req, res) {
     const multiUrn = req.patient.multiUrn;
 
     // Get query parameters for filtering and search
-    const { search, modality, dateFrom, dateTo, limit, offset } = req.query;
+    const { search, modality, dateFrom, dateTo, limit, offset, episodeType } = req.query;
 
     // Build options for the database query
     const queryOptions = {};
@@ -27,6 +27,7 @@ async function handler(req, res) {
     if (dateTo) queryOptions.dateTo = dateTo;
     if (limit) queryOptions.limit = parseInt(limit);
     if (offset) queryOptions.offset = parseInt(offset);
+    if (episodeType) queryOptions.episodeType = episodeType;
 
     if (Object.keys(queryOptions).length > 0) {
       console.log('Query options:', queryOptions);

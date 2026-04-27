@@ -9,18 +9,18 @@ export default function Toolbar({
   totalFrames
 }) {
   const tools = [
-    { id: 'wwwc', label: '🔧 W/L', title: 'Window/Level' },
-    { id: 'zoom', label: '🔍 Zoom', title: 'Zoom' },
-    { id: 'pan', label: '✋ Pan', title: 'Pan' },
-    { id: 'length', label: '📏 Length', title: 'Length Measurement' },
-    { id: 'angle', label: '📐 Angle', title: 'Angle Measurement' },
-    { id: 'roi', label: '⬜ ROI', title: 'Rectangle ROI' }
+    { id: 'wwwc', label: 'W/L', title: 'Window/Level' },
+    { id: 'zoom', label: 'Zoom', title: 'Zoom' },
+    { id: 'pan', label: 'Pan', title: 'Pan' },
+    { id: 'length', label: 'Length', title: 'Length Measurement' },
+    { id: 'angle', label: 'Angle', title: 'Angle Measurement' },
+    { id: 'roi', label: 'ROI', title: 'Rectangle ROI' }
   ];
 
   return (
     <div className="toolbar">
       <div className="tool-group">
-        <h3>🛠️ Tools</h3>
+        <h3>Tools</h3>
         <div className="tool-buttons">
           {tools.map(tool => (
             <button
@@ -36,41 +36,31 @@ export default function Toolbar({
       </div>
 
       <div className="tool-group">
-        <h3>📐 Measurements</h3>
+        <h3>Measurements</h3>
         <div className="tool-buttons">
-          <button className="tool-btn" onClick={onClearMeasurements} title="Clear all measurements">
-            🗑️ Clear
-          </button>
+          <button className="tool-btn" onClick={onClearMeasurements} title="Clear all measurements">Clear</button>
         </div>
       </div>
 
       <div className="tool-group transform-group">
-        <h3>🔄 Transform</h3>
+        <h3>Transform</h3>
         <div className="tool-buttons">
-          <button className="tool-btn" onClick={() => onRotate(-90)} title="Rotate left 90°">
-            ↺ Left
-          </button>
-          <button className="tool-btn" onClick={() => onRotate(90)} title="Rotate right 90°">
-            ↻ Right
-          </button>
-          <button className="tool-btn" onClick={onReset} title="Reset view">
-            🔄 Reset
-          </button>
+          <button className="tool-btn" onClick={() => onRotate(-90)} title="Rotate left 90°">Left</button>
+          <button className="tool-btn" onClick={() => onRotate(90)} title="Rotate right 90°">Right</button>
+          <button className="tool-btn" onClick={onReset} title="Reset view">Reset</button>
         </div>
       </div>
 
       <div className="tool-group">
-        <h3>📁 Navigation</h3>
+        <h3>Navigation</h3>
         <div className="tool-buttons">
-          <button className="tool-btn" onClick={onToggleFileBrowser} title="Toggle file browser">
-            📂 Files
-          </button>
+          <button className="tool-btn" onClick={onToggleFileBrowser} title="Toggle file browser">Files</button>
         </div>
       </div>
 
       {totalFrames > 1 && (
         <div className="tool-group">
-          <h3>🎞️ Frames</h3>
+          <h3>Frames</h3>
           <div className="frame-info">
             <span>Frame {currentFrame + 1} of {totalFrames}</span>
             <small>Use mouse wheel to navigate</small>
